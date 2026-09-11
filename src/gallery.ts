@@ -1,4 +1,5 @@
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { makeRng } from './rng.ts';
 import { localUniform, sample, uniformDerivation } from './sample.ts';
 import { renderDocument, screenCss } from './render-html.ts';
@@ -79,5 +80,6 @@ ${screenCss}
 ${cards.join('\n')}
 </div>
 `;
+mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, html);
 console.log(`wrote ${out} (${n} samples, ${(html.length / 1024).toFixed(0)} KB)`);

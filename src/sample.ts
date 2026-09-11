@@ -61,12 +61,24 @@ export function sample(g: Grammar, policy: Policy): UIDocument {
   return { grammar: grammarId(g), tree: sampleNode(g, policy, g.root, g.rootContext, '', {}, undefined, undefined) };
 }
 
+/**
+ * Offer a decision to the policy, first dropping options with no complete
+ * derivation behind them so the policy can only choose completable branches.
+ * Returns the index into the ORIGINAL options.
+ */
 function decide(policy: Policy, d: Decision): number {
-  const i = policy(d);
-  if (!Number.isInteger(i) || i < 0 || i >= d.options.length) {
-    throw new Error(`policy returned ${i} for ${d.kind} at "${d.path}" with ${d.options.length} options`);
+  const live = d.options.map((_, i) => i).filter((i) => d.weights[i] > 0n);
+  if (live.length === 0) {
+    throw new Error(`grammar admits no completion for ${d.kind} at "${d.path}" (${d.component}@${d.context})`);
   }
-  return i;
+  const offered: Decision = live.length === d.options.length
+    ? d
+    : { ...d, options: live.map((i) => d.options[i]), weights: live.map((i) => d.weights[i]) };
+  const i = policy(offered);
+  if (!Number.isInteger(i) || i < 0 || i >= offered.options.length) {
+    throw new Error(`policy returned ${i} for ${d.kind} at "${d.path}" with ${offered.options.length} options`);
+  }
+  return live[i];
 }
 
 function sampleNode(
@@ -104,25 +116,31 @@ function sampleNode(
       })];
       if (n === 0) continue;
 
+      // For distinct slots a duplicate draw is discarded. A stochastic policy
+      // gets a bounded number of extra draws to fill the slot; a deterministic
+      // one cannot, so the slot is truncated to the distinct children drawn.
+      // Either way the result is valid as long as the minimum is met.
       const children: UINode[] = [];
       const seen = new Set<string>();
-      for (let k = 0; k < n; k++) {
+      const maxDraws = sdef.distinct ? 2 * n : n;
+      for (let draw = 0; draw < maxDraws && children.length < n; draw++) {
+        const k = children.length;
         const childPath = sdef.max === 1 ? slotPath : `${slotPath}[${k}]`;
-        let child: UINode;
-        let tries = 0;
-        do {
-          const type = sdef.accepts.length === 1
-            ? sdef.accepts[0]
-            : sdef.accepts[decide(policy, {
-                kind: 'type', path: childPath, component: name, context: ctx,
-                options: [...sdef.accepts],
-                weights: sdef.accepts.map((t) => count(g, t, cctx, b.restrict, sdef.childContent, sdef.childBind)),
-              })];
-          child = sampleNode(g, policy, type, cctx, childPath, b.restrict, sdef.childContent, sdef.childBind);
-          if (++tries > 50) throw new Error(`could not draw ${n} distinct children for ${slotPath}`);
-        } while (sdef.distinct && seen.has(JSON.stringify(child)));
-        seen.add(JSON.stringify(child));
+        const type = sdef.accepts.length === 1
+          ? sdef.accepts[0]
+          : sdef.accepts[decide(policy, {
+              kind: 'type', path: childPath, component: name, context: ctx,
+              options: [...sdef.accepts],
+              weights: sdef.accepts.map((t) => count(g, t, cctx, b.restrict, sdef.childContent, sdef.childBind)),
+            })];
+        const child = sampleNode(g, policy, type, cctx, childPath, b.restrict, sdef.childContent, sdef.childBind);
+        const key = JSON.stringify(child);
+        if (sdef.distinct && seen.has(key)) continue;
+        seen.add(key);
         children.push(child);
+      }
+      if (children.length < b.min) {
+        throw new Error(`policy could not produce ${b.min} distinct children for ${slotPath}`);
       }
       slots[sname] = sdef.max === 1 ? children[0] : children;
     }

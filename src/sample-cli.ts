@@ -15,6 +15,13 @@ const seed = Number(opt('seed', '1'));
 const n = Number(opt('n', '1'));
 const policyName = opt('policy', 'local');
 
+const POLICIES = ['local', 'uniform'];
+if (!POLICIES.includes(policyName) || !Number.isInteger(seed) || !Number.isInteger(n) || n < 1) {
+  console.error('usage: node src/sample-cli.ts [--seed <int>] [--n <int>=1] [--policy local|uniform]');
+  console.error(`  got seed=${opt('seed', '1')} n=${opt('n', '1')} policy=${policyName}`);
+  process.exit(2);
+}
+
 const rng = makeRng(seed);
 const policy = policyName === 'uniform' ? uniformDerivation(rng) : localUniform(rng);
 const docs = Array.from({ length: n }, () => sample(newsfeed, policy));

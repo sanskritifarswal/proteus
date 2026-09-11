@@ -2,7 +2,9 @@
   "grammar": "newsfeed@0.3.0",
   "tree": {
     "type": "Screen",
-    "props": {},
+    "props": {
+      "density": "comfortable"
+    },
     "slots": {
       "sections": [
         {
@@ -35,6 +37,14 @@
                   }
                 }
               }
+            },
+            "heading": {
+              "type": "Text",
+              "props": {
+                "role": "title",
+                "maxLines": "2"
+              },
+              "bind": "name"
             }
           }
         }

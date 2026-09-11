@@ -1,8 +1,8 @@
 import type { Grammar, ComponentDef } from './grammar-types.ts';
 import type { UIDocument, UINode } from './tree.ts';
 import {
-  arityWays, contentOptions, count, countAssignment, countSlotChild, slotBounds, validAssignments,
-  type Assignment, type ContentMode, type Restrict,
+  arityWays, contentOptions, count, countAssignment, countSlotChild, distinctByCounts, distinctTupleWays,
+  slotBounds, validAssignments, type Assignment, type ContentMode, type Restrict,
 } from './count.ts';
 import { grammarId } from './compile-schema.ts';
 import type { Rng } from './rng.ts';
@@ -14,6 +14,7 @@ import type { Rng } from './rng.ts';
  *
  *   props    which prop assignment a node takes (one joint choice per node)
  *   arity    how many children a slot gets
+ *   value    for a distinctBy slot, which value of the field the next child takes
  *   type     which component type fills a child position
  *   content  which field binding or string key a leaf shows
  *
@@ -29,7 +30,7 @@ import type { Rng } from './rng.ts';
  * it leads to, giving exactly uniform sampling over the whole space.
  */
 export interface Decision {
-  kind: 'props' | 'arity' | 'type' | 'content';
+  kind: 'props' | 'arity' | 'value' | 'type' | 'content';
   /** Tree path, e.g. "sections[1].content.item.meta[0]". "" is the root. */
   path: string;
   component: string;
@@ -107,12 +108,13 @@ function sampleNode(
       const cctx = sdef.context ?? ctx;
       const per = countSlotChild(g, ctx, sdef, b);
       const slotPath = path ? `${path}.${sname}` : sname;
+      const buckets = sdef.distinctBy ? distinctByCounts(g, ctx, sdef, b) : undefined;
 
       const arities = Array.from({ length: b.max - b.min + 1 }, (_, k) => b.min + k);
       const n = arities[decide(policy, {
         kind: 'arity', path: slotPath, component: name, context: ctx,
         options: arities.map(String),
-        weights: arities.map((k) => arityWays(per, k, !!sdef.distinct)),
+        weights: arities.map((k) => buckets ? distinctTupleWays(buckets.map(([, c]) => c), k) : arityWays(per, k, !!sdef.distinct)),
       })];
       if (n === 0) continue;
 
@@ -120,23 +122,44 @@ function sampleNode(
       // gets a bounded number of extra draws to fill the slot; a deterministic
       // one cannot, so the slot is truncated to the distinct children drawn.
       // Either way the result is valid as long as the minimum is met.
+      // distinctBy: values already used are removed from later draws, so the
+      // children differ by construction and any policy fills the slot.
       const children: UINode[] = [];
       const seen = new Set<string>();
+      const usedValues = new Set<string>();
       const maxDraws = sdef.distinct ? 2 * n : n;
       for (let draw = 0; draw < maxDraws && children.length < n; draw++) {
         const k = children.length;
         const childPath = sdef.max === 1 ? slotPath : `${slotPath}[${k}]`;
+        let restrict = b.restrict;
+        let bindRestrict = sdef.childBind;
+        if (buckets) {
+          const remaining = buckets.filter(([v, c]) => c > 0n && !usedValues.has(v));
+          if (remaining.length === 0) break;
+          // Weight = this bucket's completions x ways to fill the positions
+          // still to come from the other remaining buckets. Weighting by the
+          // bucket alone would over-select large buckets first.
+          const left = n - k - 1;
+          const chosen = remaining[decide(policy, {
+            kind: 'value', path: childPath, component: name, context: ctx,
+            options: remaining.map(([v]) => v),
+            weights: remaining.map(([v, c]) => c * distinctTupleWays(remaining.filter(([w]) => w !== v).map(([, cw]) => cw), left)),
+          })][0];
+          if (sdef.distinctBy === 'bind') bindRestrict = [chosen];
+          else restrict = { ...restrict, [sdef.distinctBy!]: [chosen] };
+        }
         const type = sdef.accepts.length === 1
           ? sdef.accepts[0]
           : sdef.accepts[decide(policy, {
               kind: 'type', path: childPath, component: name, context: ctx,
               options: [...sdef.accepts],
-              weights: sdef.accepts.map((t) => count(g, t, cctx, b.restrict, sdef.childContent, sdef.childBind)),
+              weights: sdef.accepts.map((t) => count(g, t, cctx, restrict, sdef.childContent, bindRestrict)),
             })];
-        const child = sampleNode(g, policy, type, cctx, childPath, b.restrict, sdef.childContent, sdef.childBind);
+        const child = sampleNode(g, policy, type, cctx, childPath, restrict, sdef.childContent, bindRestrict);
         const key = JSON.stringify(child);
         if (sdef.distinct && seen.has(key)) continue;
         seen.add(key);
+        if (buckets) usedValues.add(sdef.distinctBy === 'bind' ? child.bind! : child.props![sdef.distinctBy!]);
         children.push(child);
       }
       if (children.length < b.min) {

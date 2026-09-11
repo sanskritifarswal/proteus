@@ -1,5 +1,5 @@
 {
-  "grammar": "newsfeed@0.2.0",
+  "grammar": "newsfeed@0.3.0",
   "tree": {
     "type": "Screen",
     "props": {

@@ -2,7 +2,9 @@
   "grammar": "newsfeed@0.3.0",
   "tree": {
     "type": "Screen",
-    "props": {},
+    "props": {
+      "density": "comfortable"
+    },
     "slots": {
       "sections": [
         {
@@ -21,7 +23,7 @@
                 "item": {
                   "type": "Card",
                   "props": {
-                    "variant": "compact"
+                    "variant": "hero"
                   },
                   "slots": {
                     "title": {
@@ -31,6 +33,13 @@
                         "maxLines": "2"
                       },
                       "bind": "title"
+                    },
+                    "media": {
+                      "type": "Image",
+                      "props": {
+                        "aspect": "1:1"
+                      },
+                      "bind": "imageUrl"
                     }
                   }
                 }

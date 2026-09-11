@@ -1,6 +1,6 @@
-# Proteus component grammar v0.2 — design notes
+# Proteus component grammar v0.3 — design notes
 
-Status: draft, 2026-09-10. Grammar source: [`src/grammars/newsfeed.ts`](../src/grammars/newsfeed.ts).
+Status: draft, 2026-09-11. Grammar source: [`src/grammars/newsfeed.ts`](../src/grammars/newsfeed.ts).
 Run `npm run check` to regenerate the JSON Schema and validate every example.
 
 ## 1. What the grammar is
@@ -24,8 +24,8 @@ Rules that keep the derivation space finite and meaningful:
    developer-declared string key. The model never writes copy.
 2. **No recursion.** `Screen → Section → Collection → Card → leaf` is the only path. Max depth 4.
 3. **Every slot has a max cardinality. Every prop is an enum with no default**, so a derivation is fully explicit.
-4. **Cross-node constraints are declarative** (`when variant=hero, requireSlot media`) so they compile
-   to JSON Schema and are honoured by the derivation counter.
+4. **Cross-node constraints are declarative** (`when variant=hero, requireSlot media`, `sections
+   distinctBy source`) so they compile to JSON Schema and are honoured by the counter and sampler.
 5. **Content, ranking and theme are out of scope.** Feeds arrive already ranked; the grammar chooses
    presentation of ranked data. Colours, type and spacing tokens are the renderer's. The one exception
    is `Screen.density`, a single screen-wide scale the renderer maps onto its own spacing tokens; no
@@ -75,11 +75,11 @@ Eight components. Props are string enums; slots list accepted types and cardinal
 
 | Component | Context | Props | Slots | Constraints |
 |---|---|---|---|---|
-| `Screen` (root) | screen | `density: comfortable \| compact` | `header: Header 0..1` · `sections: Section 1..5` | — |
+| `Screen` (root) | screen | `density: comfortable \| compact` | `header: Header 0..1` · `sections: Section 1..5 distinct by source` | — |
 | `Header` | screen | — | `title: Text 1 (role=title)` · `action: Button 0..1` | — |
-| `Section` | screen | `source: topStories \| forYou \| following \| continueReading \| saved` | `heading: Text 0..1 (role=title\|label)` · `content: Collection 1` · `footer: Button 0..1` — all in **feed** context | — |
+| `Section` | screen | `source: topStories \| forYou \| following \| continueReading \| saved` | `heading: Text 0..1 (role=title\|label, maxLines=1, bind name)` · `content: Collection 1` · `footer: Button 0..1` — all in **feed** context | — |
 | `Collection` | feed | `layout: stack \| carousel \| grid` · `limit: 3 \| 5 \| 10` | `lead: Card 0..1` · `item: Card 1` — both in **article** context | grid ⇒ item.variant=standard · carousel ⇒ item.variant∈{hero,standard} · grid/carousel ⇒ no lead |
-| `Card` | article | `variant: hero \| standard \| compact` | `media: Image 0..1` · `title: Text 1 (role=title, bind title)` · `meta: Text 0..2 distinct (role=caption\|label, bind source\|author\|publishedAt\|readTime\|topic)` · `summary: Text 0..1 (role=body, bind dek)` · `actions: Button 0..2 distinct` | hero ⇒ media required · compact ⇒ no summary · compact ⇒ media.aspect=1:1 |
+| `Card` | article | `variant: hero \| standard \| compact` | `media: Image 0..1` · `title: Text 1 (role=title, bind title)` · `meta: Text 0..2 distinct by bind (role=caption\|label, bind source\|author\|publishedAt\|readTime\|topic)` · `summary: Text 0..1 (role=body, bind dek)` · `actions: Button 0..2 distinct by action` | hero ⇒ media required · hero ⇒ media.aspect∈{16:9,4:3} · compact ⇒ no summary · compact ⇒ media.aspect=1:1 |
 | `Text` | screen, feed, article | `role: title \| body \| caption \| label` · `maxLines: 1 \| 2 \| 3` | leaf: `bind` a text field **or** `key` a string | caption/label ⇒ maxLines=1 |
 | `Image` | article | `aspect: 16:9 \| 4:3 \| 1:1` | leaf: `bind` an image field | — |
 | `Button` | screen, feed, article | `action` (by context: screen → refresh, search · feed → seeMore · article → read, save, share, follow, dismiss) · `style: primary \| secondary \| ghost` | leaf, no content (label/icon derived from `action`) | — |
@@ -98,6 +98,13 @@ Design decisions worth calling out:
 - **Slot-level binding restrictions (`childBind`).** Without them a card titled by `readTime` was a
   legal derivation. Counting the space (section 6) is what surfaced this.
 - **Props are string enums, even `limit`.** The bandit sees categorical choices; the renderer parses.
+- **Section headings bind the feed name and nothing else.** v0.2 let a heading be any string key, so
+  the gallery showed "Saved" headed *For You*. Tying the heading to the source removes the whole
+  class of error and the `section.*` string keys with it.
+- **`distinctBy` instead of whole-node `distinct`.** Two "Save" buttons in different styles, two
+  meta lines bound to the same field, and two sections on the same feed were all legal because
+  `uniqueItems` compares whole nodes. `distinctBy` names the field that must differ and compiles to
+  a `not` over each pair of positions.
 - **`Screen.density` is the one theme-level knob.** Spacing is otherwise the renderer's, but a global
   comfortable/compact scale is a real personalisation axis (power readers vs browsers) and it is one
   choice per screen, so it costs the action space almost nothing. It constrains nothing else in the
@@ -118,7 +125,7 @@ Grammar-agnostic shape ([`src/tree.ts`](../src/tree.ts)):
   type (`media?: ImageNode; meta?: TextNode[]`).
 - No `id` field. A node's path (`sections[1].content.item.actions[0]`) is its identity, stable across
   derivations that share structure. That is what per-slot reward attribution will key on later.
-- A tree travels inside an envelope, `{ "grammar": "newsfeed@0.2.0", "tree": { ... } }`. The
+- A tree travels inside an envelope, `{ "grammar": "newsfeed@0.3.0", "tree": { ... } }`. The
   compiled schema pins the exact grammar id, so a renderer refuses a tree derived from any other
   version instead of misrendering it.
 
@@ -132,7 +139,7 @@ Grammar-agnostic shape ([`src/tree.ts`](../src/tree.ts)):
 | `dense-list.json` | power reader | No header; three compact stacks (continue reading, for you ×10 with 1:1 thumbnails + save, following with dismiss); label-style headings |
 | `visual-grid.json` | visual browser | Hero carousel with no heading; For You as a 2-up grid bound to the feed name; Saved as compact rows with dismiss |
 
-### 6.2 Fourteen things it correctly refuses ([`examples/invalid/`](../examples/invalid/))
+### 6.2 Twenty things it correctly refuses ([`examples/invalid/`](../examples/invalid/))
 
 Each file breaks exactly one rule; the validator reports the offending path and the allowed values.
 
@@ -150,7 +157,13 @@ Each file breaks exactly one rule; the validator reports the offending path and 
 | `card-inside-card` | slot type acceptance (no recursion) |
 | `too-many-sections` | cardinality |
 | `screen-missing-density` | all declared props are required |
-| `wrong-grammar-version` | envelope pins the grammar id (a 0.2.0-shaped tree labelled `newsfeed@0.1.0`; rejected on the id alone) |
+| `duplicate-section-source` | distinctBy source on `Screen.sections` |
+| `duplicate-meta-bind` | distinctBy bind on `Card.meta` |
+| `duplicate-action` | distinctBy action on `Card.actions` |
+| `hero-with-square-image` | hero ⇒ media aspect 16:9 or 4:3 |
+| `section-heading-from-string-key` | headings bind `feed.name` only |
+| `section-heading-two-lines` | heading maxLines 1 |
+| `wrong-grammar-version` | envelope pins the grammar id (a current-shaped tree labelled `newsfeed@0.1.0`; rejected on the id alone) |
 | `missing-envelope` | bare tree without envelope |
 
 ### 6.3 Size of the derivation space (`npm run count`)
@@ -160,11 +173,14 @@ Exact counts, honouring every constraint. Ordered sequences in array slots count
 | Node | Derivations |
 |---|---|
 | `Button@article` | 15 |
-| `Card@article` (compact only) | 137 k |
-| `Card@article` | 2.05 M |
-| `Collection@feed` | 1.3 × 10¹³ |
-| `Section@screen` | 8.4 × 10¹⁵ |
-| `Screen@screen` | 1.5 × 10⁸² |
+| `Card@article` (compact only) | 107 k |
+| `Card@article` | 1.39 M |
+| `Collection@feed` | 5.8 × 10¹² |
+| `Section@screen` | 3.5 × 10¹⁴ |
+| `Screen@screen` | 3.4 × 10⁷³ |
+
+v0.3's constraints removed nine orders of magnitude from the screen count, almost all from making
+sections distinct by source (ordered selections of 1..5 distinct feeds instead of 1..5 free choices).
 
 Two consequences for the ML layer, noted here only so the grammar does not paint it into a corner:
 
@@ -174,14 +190,11 @@ Two consequences for the ML layer, noted here only so the grammar does not paint
   `Screen.sections` sequences. Those are also the choices least likely to matter, so they are
   candidates for freezing or tying in early experiments.
 
-### 6.4 What it cannot express yet (deliberate v0.1 gaps)
+### 6.4 What it cannot express yet (deliberate v0.3 gaps)
 
 - Mixed item templates beyond lead + rest (e.g. alternating layouts).
 - Non-feed blocks between sections: promos, topic chips, "you're all caught up", empty states.
 - Navigation (tabs, bottom bar), search UI, article detail screen.
-- "Distinct by field" for array slots. `distinct` compiles to JSON Schema `uniqueItems`, which
-  rejects `[save, save]` but not `[save ghost, save primary]`. A semantic check or per-slot
-  enumeration would close this.
 
 ## 7. Schema format recommendation
 
@@ -212,7 +225,7 @@ The generated JSON Schema pays for itself twice more downstream: it is a ready-m
 constrained-decoding grammar if an LLM ever proposes trees, and it is the precise action-space spec
 the on-device scorer must respect.
 
-## 8. Open questions for v0.2
+## 8. Open questions
 
 - Should `Section.source` be a prop (as now) or a binding into a `feeds` collection on the screen
   context? A binding generalises to arbitrary developer-defined feeds; a prop keeps the enum visible

@@ -1,4 +1,5 @@
 import type { Grammar, ComponentDef, SlotDef } from './grammar-types.ts';
+import { distinctByValues } from './compile-schema.ts';
 
 /**
  * Shared derivation-space arithmetic used by the counter and the sampler.
@@ -75,10 +76,44 @@ export function arityWays(per: bigint, n: number, distinct: boolean): bigint {
 
 const memo = new Map<string, bigint>();
 
+/**
+ * For a distinctBy slot: number of child derivations per value of the field.
+ * The order of values is stable so the sampler can reuse it.
+ */
+export function distinctByCounts(g: Grammar, ctx: string, sdef: SlotDef, b: SlotBounds): Array<[string, bigint]> {
+  const cctx = sdef.context ?? ctx;
+  const field = sdef.distinctBy!;
+  const values = distinctByValues(g, '?', '?', sdef, cctx);
+  return values.map((v) => {
+    let c = 0n;
+    for (const child of sdef.accepts) {
+      c += field === 'bind'
+        ? count(g, child, cctx, b.restrict, sdef.childContent, [v].filter((f) => !sdef.childBind || sdef.childBind.includes(f)))
+        : count(g, child, cctx, { ...b.restrict, [field]: (b.restrict[field] ?? [v]).filter((x) => x === v) }, sdef.childContent, sdef.childBind);
+    }
+    return [v, c];
+  });
+}
+
+/** Ordered n-tuples drawing each element from a different bucket: n! * e_n(bucket sizes). */
+export function distinctTupleWays(buckets: bigint[], n: number): bigint {
+  // e[k] = elementary symmetric polynomial of degree k over the bucket sizes.
+  const e: bigint[] = Array.from({ length: n + 1 }, (_, k) => (k === 0 ? 1n : 0n));
+  for (const c of buckets) for (let k = n; k >= 1; k--) e[k] += e[k - 1] * c;
+  let fact = 1n;
+  for (let k = 2; k <= n; k++) fact *= BigInt(k);
+  return e[n] * fact;
+}
+
 /** Derivations of one slot: sum over legal arities of the ways to fill it. */
 export function countSlot(g: Grammar, ctx: string, sdef: SlotDef, b: SlotBounds): bigint {
-  const per = countSlotChild(g, ctx, sdef, b);
   let total = 0n;
+  if (sdef.distinctBy) {
+    const buckets = distinctByCounts(g, ctx, sdef, b).map(([, c]) => c);
+    for (let n = b.min; n <= b.max; n++) total += distinctTupleWays(buckets, n);
+    return total;
+  }
+  const per = countSlotChild(g, ctx, sdef, b);
   for (let n = b.min; n <= b.max; n++) total += arityWays(per, n, !!sdef.distinct);
   return total;
 }

@@ -1,0 +1,32 @@
+{
+  "type": "Screen",
+  "slots": {
+    "header": {
+      "type": "Header",
+      "slots": {
+        "title": { "type": "Text", "props": { "role": "title", "maxLines": "1" }, "text": "Good morning, Sam!" }
+      }
+    },
+    "sections": [
+      {
+        "type": "Section",
+        "props": { "source": "forYou" },
+        "slots": {
+          "content": {
+            "type": "Collection",
+            "props": { "layout": "stack", "limit": "5" },
+            "slots": {
+              "item": {
+                "type": "Card",
+                "props": { "variant": "compact" },
+                "slots": {
+                  "title": { "type": "Text", "props": { "role": "title", "maxLines": "2" }, "bind": "title" }
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

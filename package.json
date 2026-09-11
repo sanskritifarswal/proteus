@@ -1,0 +1,15 @@
+{
+  "name": "proteus",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Generative UI framework: typed component grammars, model-assembled layouts.",
+  "scripts": {
+    "schema": "node src/build-schema.ts",
+    "check": "node src/validate.ts",
+    "count": "node src/count-space.ts"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0"
+  }
+}

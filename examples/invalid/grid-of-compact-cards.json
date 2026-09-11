@@ -1,0 +1,26 @@
+{
+  "type": "Screen",
+  "slots": {
+    "sections": [
+      {
+        "type": "Section",
+        "props": { "source": "forYou" },
+        "slots": {
+          "content": {
+            "type": "Collection",
+            "props": { "layout": "grid", "limit": "10" },
+            "slots": {
+              "item": {
+                "type": "Card",
+                "props": { "variant": "compact" },
+                "slots": {
+                  "title": { "type": "Text", "props": { "role": "title", "maxLines": "2" }, "bind": "title" }
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,1240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "newsfeed 0.1.0 UI tree",
+  "description": "Generated from the 'newsfeed' grammar. Root: Screen in context 'screen'.",
+  "$ref": "#/$defs/Screen@screen",
+  "$defs": {
+    "Screen@screen": {
+      "description": "Root. One vertical scroll of sections with an optional header.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Screen"
+        },
+        "slots": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "header": {
+              "$ref": "#/$defs/Header@screen"
+            },
+            "sections": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Section@screen"
+              },
+              "minItems": 1,
+              "maxItems": 5
+            }
+          },
+          "required": [
+            "sections"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "slots"
+      ]
+    },
+    "Header@screen": {
+      "description": "Screen title bar with an optional utility action.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Header"
+        },
+        "slots": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/Text@screen"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "props": {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "enum": [
+                            "title"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "action": {
+              "$ref": "#/$defs/Button@screen"
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "slots"
+      ]
+    },
+    "Section@screen": {
+      "description": "Binds one feed and establishes the `feed` context for its children.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Section"
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "description": "Which feed this section renders.",
+              "enum": [
+                "topStories",
+                "forYou",
+                "following",
+                "continueReading",
+                "saved"
+              ]
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "slots": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "heading": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/Text@feed"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "props": {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "enum": [
+                            "title",
+                            "label"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "content": {
+              "$ref": "#/$defs/Collection@feed"
+            },
+            "footer": {
+              "$ref": "#/$defs/Button@feed"
+            }
+          },
+          "required": [
+            "content"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "props",
+        "slots"
+      ]
+    },
+    "Text@screen": {
+      "description": "A run of text bound to a context field or a string key.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Text"
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "role": {
+              "enum": [
+                "title",
+                "body",
+                "caption",
+                "label"
+              ]
+            },
+            "maxLines": {
+              "enum": [
+                "1",
+                "2",
+                "3"
+              ]
+            }
+          },
+          "required": [
+            "role",
+            "maxLines"
+          ]
+        },
+        "bind": {
+          "enum": [
+            "greeting",
+            "todayDate"
+          ]
+        },
+        "key": {
+          "enum": [
+            "header.home",
+            "header.forYou",
+            "section.topStories",
+            "section.forYou",
+            "section.following",
+            "section.continueReading",
+            "section.saved"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "props"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "bind"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "key"
+          ]
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "const": "caption"
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "maxLines": {
+                    "enum": [
+                      "1"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "const": "label"
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "maxLines": {
+                    "enum": [
+                      "1"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Button@screen": {
+      "description": "An action. Its label and icon are derived from `action` by the renderer, so they are not choices.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Button"
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "enum": [
+                "refresh",
+                "search"
+              ]
+            },
+            "style": {
+              "enum": [
+                "primary",
+                "secondary",
+                "ghost"
+              ]
+            }
+          },
+          "required": [
+            "action",
+            "style"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "props"
+      ]
+    },
+    "Text@feed": {
+      "description": "A run of text bound to a context field or a string key.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Text"
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "role": {
+              "enum": [
+                "title",
+                "body",
+                "caption",
+                "label"
+              ]
+            },
+            "maxLines": {
+              "enum": [
+                "1",
+                "2",
+                "3"
+              ]
+            }
+          },
+          "required": [
+            "role",
+            "maxLines"
+          ]
+        },
+        "bind": {
+          "enum": [
+            "name"
+          ]
+        },
+        "key": {
+          "enum": [
+            "header.home",
+            "header.forYou",
+            "section.topStories",
+            "section.forYou",
+            "section.following",
+            "section.continueReading",
+            "section.saved"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "props"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "bind"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "key"
+          ]
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "const": "caption"
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "maxLines": {
+                    "enum": [
+                      "1"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "const": "label"
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "maxLines": {
+                    "enum": [
+                      "1"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Collection@feed": {
+      "description": "Repeater. Lays out feed items using an item template (and an optional lead template for the first item).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Collection"
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "layout": {
+              "enum": [
+                "stack",
+                "carousel",
+                "grid"
+              ]
+            },
+            "limit": {
+              "description": "Max items rendered.",
+              "enum": [
+                "3",
+                "5",
+                "10"
+              ]
+            }
+          },
+          "required": [
+            "layout",
+            "limit"
+          ]
+        },
+        "slots": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "lead": {
+              "description": "Template for the first item only. Stack layouts only.",
+              "$ref": "#/$defs/Card@article"
+            },
+            "item": {
+              "description": "Template applied to every (remaining) item.",
+              "$ref": "#/$defs/Card@article"
+            }
+          },
+          "required": [
+            "item"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "props",
+        "slots"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "layout": {
+                    "const": "grid"
+                  }
+                },
+                "required": [
+                  "layout"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "slots": {
+                "type": "object",
+                "properties": {
+                  "item": {
+                    "type": "object",
+                    "properties": {
+                      "props": {
+                        "type": "object",
+                        "properties": {
+                          "variant": {
+                            "enum": [
+                              "standard"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "layout": {
+                    "const": "carousel"
+                  }
+                },
+                "required": [
+                  "layout"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "slots": {
+                "type": "object",
+                "properties": {
+                  "item": {
+                    "type": "object",
+                    "properties": {
+                      "props": {
+                        "type": "object",
+                        "properties": {
+                          "variant": {
+                            "enum": [
+                              "hero",
+                              "standard"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "layout": {
+                    "const": "grid"
+                  }
+                },
+                "required": [
+                  "layout"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "slots": {
+                "type": "object",
+                "not": {
+                  "type": "object",
+                  "required": [
+                    "lead"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "layout": {
+                    "const": "carousel"
+                  }
+                },
+                "required": [
+                  "layout"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "slots": {
+                "type": "object",
+                "not": {
+                  "type": "object",
+                  "required": [
+                    "lead"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Button@feed": {
+      "description": "An action. Its label and icon are derived from `action` by the renderer, so they are not choices.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Button"
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "enum": [
+                "seeMore"
+              ]
+            },
+            "style": {
+              "enum": [
+                "primary",
+                "secondary",
+                "ghost"
+              ]
+            }
+          },
+          "required": [
+            "action",
+            "style"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "props"
+      ]
+    },
+    "Card@article": {
+      "description": "Renders one article. Tapping anywhere opens it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Card"
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "variant": {
+              "enum": [
+                "hero",
+                "standard",
+                "compact"
+              ]
+            }
+          },
+          "required": [
+            "variant"
+          ]
+        },
+        "slots": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "media": {
+              "$ref": "#/$defs/Image@article"
+            },
+            "title": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/Text@article"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "props": {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "enum": [
+                            "title"
+                          ]
+                        }
+                      }
+                    },
+                    "bind": {
+                      "enum": [
+                        "title"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "bind"
+                  ]
+                }
+              ]
+            },
+            "meta": {
+              "type": "array",
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/Text@article"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "props": {
+                        "type": "object",
+                        "properties": {
+                          "role": {
+                            "enum": [
+                              "caption",
+                              "label"
+                            ]
+                          }
+                        }
+                      },
+                      "bind": {
+                        "enum": [
+                          "source",
+                          "author",
+                          "publishedAt",
+                          "readTime",
+                          "topic"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "bind"
+                    ]
+                  }
+                ]
+              },
+              "minItems": 0,
+              "maxItems": 2,
+              "uniqueItems": true
+            },
+            "summary": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/Text@article"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "props": {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "enum": [
+                            "body"
+                          ]
+                        }
+                      }
+                    },
+                    "bind": {
+                      "enum": [
+                        "dek"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "bind"
+                  ]
+                }
+              ]
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Button@article"
+              },
+              "minItems": 0,
+              "maxItems": 2,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "props",
+        "slots"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "variant": {
+                    "const": "hero"
+                  }
+                },
+                "required": [
+                  "variant"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "slots": {
+                "type": "object",
+                "required": [
+                  "media"
+                ]
+              }
+            },
+            "required": [
+              "slots"
+            ]
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "variant": {
+                    "const": "compact"
+                  }
+                },
+                "required": [
+                  "variant"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "slots": {
+                "type": "object",
+                "not": {
+                  "type": "object",
+                  "required": [
+                    "summary"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "variant": {
+                    "const": "compact"
+                  }
+                },
+                "required": [
+                  "variant"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "slots": {
+                "type": "object",
+                "properties": {
+                  "media": {
+                    "type": "object",
+                    "properties": {
+                      "props": {
+                        "type": "object",
+                        "properties": {
+                          "aspect": {
+                            "enum": [
+                              "1:1"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Image@article": {
+      "description": "An image bound to a context field.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Image"
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "aspect": {
+              "enum": [
+                "16:9",
+                "4:3",
+                "1:1"
+              ]
+            }
+          },
+          "required": [
+            "aspect"
+          ]
+        },
+        "bind": {
+          "enum": [
+            "imageUrl"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "props",
+        "bind"
+      ]
+    },
+    "Text@article": {
+      "description": "A run of text bound to a context field or a string key.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Text"
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "role": {
+              "enum": [
+                "title",
+                "body",
+                "caption",
+                "label"
+              ]
+            },
+            "maxLines": {
+              "enum": [
+                "1",
+                "2",
+                "3"
+              ]
+            }
+          },
+          "required": [
+            "role",
+            "maxLines"
+          ]
+        },
+        "bind": {
+          "enum": [
+            "title",
+            "dek",
+            "source",
+            "author",
+            "publishedAt",
+            "readTime",
+            "topic"
+          ]
+        },
+        "key": {
+          "enum": [
+            "header.home",
+            "header.forYou",
+            "section.topStories",
+            "section.forYou",
+            "section.following",
+            "section.continueReading",
+            "section.saved"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "props"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "bind"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "key"
+          ]
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "const": "caption"
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "maxLines": {
+                    "enum": [
+                      "1"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "const": "label"
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "maxLines": {
+                    "enum": [
+                      "1"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Button@article": {
+      "description": "An action. Its label and icon are derived from `action` by the renderer, so they are not choices.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Button"
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "enum": [
+                "read",
+                "save",
+                "share",
+                "follow",
+                "dismiss"
+              ]
+            },
+            "style": {
+              "enum": [
+                "primary",
+                "secondary",
+                "ghost"
+              ]
+            }
+          },
+          "required": [
+            "action",
+            "style"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "props"
+      ]
+    }
+  }
+}

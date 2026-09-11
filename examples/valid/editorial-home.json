@@ -1,0 +1,80 @@
+{
+  "type": "Screen",
+  "slots": {
+    "header": {
+      "type": "Header",
+      "slots": {
+        "title": { "type": "Text", "props": { "role": "title", "maxLines": "1" }, "bind": "greeting" },
+        "action": { "type": "Button", "props": { "action": "search", "style": "ghost" } }
+      }
+    },
+    "sections": [
+      {
+        "type": "Section",
+        "props": { "source": "topStories" },
+        "slots": {
+          "heading": { "type": "Text", "props": { "role": "title", "maxLines": "1" }, "key": "section.topStories" },
+          "content": {
+            "type": "Collection",
+            "props": { "layout": "stack", "limit": "5" },
+            "slots": {
+              "lead": {
+                "type": "Card",
+                "props": { "variant": "hero" },
+                "slots": {
+                  "media": { "type": "Image", "props": { "aspect": "16:9" }, "bind": "imageUrl" },
+                  "title": { "type": "Text", "props": { "role": "title", "maxLines": "3" }, "bind": "title" },
+                  "meta": [
+                    { "type": "Text", "props": { "role": "caption", "maxLines": "1" }, "bind": "source" }
+                  ],
+                  "summary": { "type": "Text", "props": { "role": "body", "maxLines": "2" }, "bind": "dek" },
+                  "actions": [
+                    { "type": "Button", "props": { "action": "save", "style": "ghost" } },
+                    { "type": "Button", "props": { "action": "share", "style": "ghost" } }
+                  ]
+                }
+              },
+              "item": {
+                "type": "Card",
+                "props": { "variant": "standard" },
+                "slots": {
+                  "media": { "type": "Image", "props": { "aspect": "4:3" }, "bind": "imageUrl" },
+                  "title": { "type": "Text", "props": { "role": "title", "maxLines": "2" }, "bind": "title" },
+                  "meta": [
+                    { "type": "Text", "props": { "role": "caption", "maxLines": "1" }, "bind": "source" },
+                    { "type": "Text", "props": { "role": "label", "maxLines": "1" }, "bind": "readTime" }
+                  ]
+                }
+              }
+            }
+          },
+          "footer": { "type": "Button", "props": { "action": "seeMore", "style": "secondary" } }
+        }
+      },
+      {
+        "type": "Section",
+        "props": { "source": "forYou" },
+        "slots": {
+          "heading": { "type": "Text", "props": { "role": "title", "maxLines": "1" }, "key": "section.forYou" },
+          "content": {
+            "type": "Collection",
+            "props": { "layout": "carousel", "limit": "10" },
+            "slots": {
+              "item": {
+                "type": "Card",
+                "props": { "variant": "standard" },
+                "slots": {
+                  "media": { "type": "Image", "props": { "aspect": "1:1" }, "bind": "imageUrl" },
+                  "title": { "type": "Text", "props": { "role": "title", "maxLines": "2" }, "bind": "title" },
+                  "meta": [
+                    { "type": "Text", "props": { "role": "label", "maxLines": "1" }, "bind": "topic" }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -10,6 +10,17 @@
  * Paths are stable across derivations that share structure, which is what
  * per-slot reward attribution will need later. No `id` field is required.
  */
+/**
+ * What actually travels between model and renderer: a tree plus the id of
+ * the grammar it was derived from (`<name>@<version>`). The compiled JSON
+ * Schema pins the exact id, so a renderer built against one grammar version
+ * refuses trees derived from another instead of misrendering them.
+ */
+export interface UIDocument {
+  grammar: string;
+  tree: UINode;
+}
+
 export interface UINode {
   type: string;
   /** Enum-valued parameters of this production. Required if the component declares any props. */

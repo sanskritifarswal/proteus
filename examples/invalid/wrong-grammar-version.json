@@ -1,33 +1,13 @@
 {
-  "grammar": "newsfeed@0.1.0",
+  "grammar": "newsfeed@0.0.9",
   "tree": {
     "type": "Screen",
     "slots": {
-      "header": {
-        "type": "Header",
-        "slots": {
-          "title": {
-            "type": "Text",
-            "props": {
-              "role": "title",
-              "maxLines": "1"
-            },
-            "bind": "greeting"
-          },
-          "action": {
-            "type": "Button",
-            "props": {
-              "action": "save",
-              "style": "ghost"
-            }
-          }
-        }
-      },
       "sections": [
         {
           "type": "Section",
           "props": {
-            "source": "forYou"
+            "source": "topStories"
           },
           "slots": {
             "content": {

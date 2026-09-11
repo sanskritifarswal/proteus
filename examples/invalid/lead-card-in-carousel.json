@@ -1,34 +1,66 @@
 {
-  "type": "Screen",
-  "slots": {
-    "sections": [
-      {
-        "type": "Section",
-        "props": { "source": "topStories" },
-        "slots": {
-          "content": {
-            "type": "Collection",
-            "props": { "layout": "carousel", "limit": "5" },
-            "slots": {
-              "lead": {
-                "type": "Card",
-                "props": { "variant": "hero" },
-                "slots": {
-                  "media": { "type": "Image", "props": { "aspect": "16:9" }, "bind": "imageUrl" },
-                  "title": { "type": "Text", "props": { "role": "title", "maxLines": "2" }, "bind": "title" }
-                }
+  "grammar": "newsfeed@0.1.0",
+  "tree": {
+    "type": "Screen",
+    "slots": {
+      "sections": [
+        {
+          "type": "Section",
+          "props": {
+            "source": "topStories"
+          },
+          "slots": {
+            "content": {
+              "type": "Collection",
+              "props": {
+                "layout": "carousel",
+                "limit": "5"
               },
-              "item": {
-                "type": "Card",
-                "props": { "variant": "standard" },
-                "slots": {
-                  "title": { "type": "Text", "props": { "role": "title", "maxLines": "2" }, "bind": "title" }
+              "slots": {
+                "lead": {
+                  "type": "Card",
+                  "props": {
+                    "variant": "hero"
+                  },
+                  "slots": {
+                    "media": {
+                      "type": "Image",
+                      "props": {
+                        "aspect": "16:9"
+                      },
+                      "bind": "imageUrl"
+                    },
+                    "title": {
+                      "type": "Text",
+                      "props": {
+                        "role": "title",
+                        "maxLines": "2"
+                      },
+                      "bind": "title"
+                    }
+                  }
+                },
+                "item": {
+                  "type": "Card",
+                  "props": {
+                    "variant": "standard"
+                  },
+                  "slots": {
+                    "title": {
+                      "type": "Text",
+                      "props": {
+                        "role": "title",
+                        "maxLines": "2"
+                      },
+                      "bind": "title"
+                    }
+                  }
                 }
               }
             }
           }
         }
-      }
-    ]
+      ]
+    }
   }
 }

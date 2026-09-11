@@ -1,6 +1,6 @@
 import { makeRng } from './rng.ts';
 import { fakeData } from './fake-data.ts';
-import { nodePaths } from './tree.ts';
+import { nodePaths, type UIDocument, type UINode } from './tree.ts';
 import { makePopulation } from './sim/users.ts';
 import { fixedScreenPolicy, loadExample, randomScreenPolicy, runEpisodes } from './sim/episodes.ts';
 
@@ -49,6 +49,51 @@ const report = (ok: boolean, msg: string) => { if (!ok) failures++; console.log(
   const be = runEpisodes(editorial, browsers, fakeData, 6, 7).stats.meanEpisodeReward;
   report(pd > pe, `power readers prefer dense-list (${pd.toFixed(2)}) over editorial-home (${pe.toFixed(2)})`);
   report(be > bd, `browsers prefer editorial-home (${be.toFixed(2)}) over dense-list (${bd.toFixed(2)})`);
+}
+
+// Volume must not pay by itself. Two forms of the claim:
+//  (a) a layout fitted to patient readers (dense and long) beats maximal
+//      random trees for them, so richness does not substitute for fit;
+//  (b) for impatient visual readers, inflating their fitted layout (every
+//      limit to 10, every card given a summary, two meta lines and two
+//      buttons) lowers their reward, so clutter and quantity cost something.
+// If either fails, the reward or the user model pays for sheer quantity,
+// which is the incentive the design guardrail forbids.
+function inflate(doc: UIDocument): UIDocument {
+  const d = JSON.parse(JSON.stringify(doc)) as UIDocument;
+  for (const sec of d.tree.slots!.sections as UINode[]) {
+    const coll = sec.slots!.content as UINode;
+    coll.props!.limit = '10';
+    for (const key of ['lead', 'item'] as const) {
+      const card = coll.slots?.[key] as UINode | undefined;
+      if (!card) continue;
+      card.slots ??= {};
+      if (card.props!.variant !== 'compact') card.slots.summary = { type: 'Text', props: { role: 'body', maxLines: '2' }, bind: 'dek' };
+      card.slots.meta = [
+        { type: 'Text', props: { role: 'caption', maxLines: '1' }, bind: 'source' },
+        { type: 'Text', props: { role: 'label', maxLines: '1' }, bind: 'readTime' },
+      ];
+      card.slots.actions = [
+        { type: 'Button', props: { action: 'save', style: 'ghost' } },
+        { type: 'Button', props: { action: 'share', style: 'ghost' } },
+      ];
+    }
+  }
+  return d;
+}
+{
+  const N = 400;
+  const power = makePopulation(N, makeRng(31), 'power-reader');
+  const browsers = makePopulation(N, makeRng(32), 'browser');
+  const denseLong = loadExample('dense-list');
+  for (const sec of denseLong.tree.slots!.sections as UINode[]) (sec.slots!.content as UINode).props!.limit = '10';
+  const pd = runEpisodes(fixedScreenPolicy(denseLong), power, fakeData, 8, 13).stats.meanEpisodeReward;
+  const pm = runEpisodes(randomScreenPolicy('uniform'), power, fakeData, 8, 13).stats.meanEpisodeReward;
+  report(pd > pm, `fitted layout beats maximal random trees for power readers (dense-list x10 ${pd.toFixed(1)} vs maximal ${pm.toFixed(1)})`);
+  const grid = loadExample('visual-grid');
+  const bg = runEpisodes(fixedScreenPolicy(grid), browsers, fakeData, 8, 13).stats.meanEpisodeReward;
+  const bi = runEpisodes(fixedScreenPolicy(inflate(grid)), browsers, fakeData, 8, 13).stats.meanEpisodeReward;
+  report(bg > bi, `inflating the fitted layout lowers reward for browsers (visual-grid ${bg.toFixed(1)} vs inflated ${bi.toFixed(1)})`);
 }
 
 // Availability matters: with no dismiss button anywhere, no dismiss events.

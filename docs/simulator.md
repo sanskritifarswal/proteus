@@ -48,9 +48,9 @@ enforced by `tsc`.
 ## Reward (`src/reward.ts`)
 
 Weighted sum with the largest weights on completion and return, dismissal
-as a real negative, and saturating engagement terms (square root of opens,
-capped dwell). Weights are a parameter: the local scorer can shift them per
-user or expose some to the user.
+as a real negative, and saturating volume terms (square root of opens and
+of total completion, capped dwell). Weights are a parameter: the local
+scorer can shift them per user or expose some to the user.
 
 ## Synthetic readers (`src/sim/users.ts`)
 
@@ -64,11 +64,21 @@ policy never sees these; it only sees events.
 
 Walk the tree in render order. For each shown article: does the user still
 scroll this far (patience, stretched by density fit), do they open it
-(curiosity, topic affinity, visual fit of the card, information on the
-card, novelty), how much do they read, and which of the card's *available*
-buttons do they use. A user can only dismiss an article if the derivation
-put a dismiss button on that card. Session satisfaction then sets the
-return probability.
+(curiosity, topic affinity, visual fit of the card, text on the card for
+readers who want text, clutter from buttons for readers who do not, small
+tiles in grids and carousels, novelty), how much do they read, and which of
+the card's *available* buttons do they use. A user can only dismiss an
+article if the derivation put a dismiss button on that card.
+
+Feeds the user built themselves (following, saved, continue reading) are
+filled with articles on topics that user likes, because that is what
+following or saving means. A flat relevance boost on undifferentiated
+content was the first version's mistake: any tree that merely covered those
+sections won.
+
+Session satisfaction sets the return probability. Completed reads raise
+it; opened-and-abandoned reads lower it (they feel like bait), as do
+dismissals and long low-yield scrolling.
 
 ## Checks (`npm run check` runs `src/check-sim.ts`)
 
@@ -81,6 +91,11 @@ return probability.
   browsers the reverse. A simulator that fails this cannot tell policies
   apart and is not worth training against.
 - A tree with no dismiss buttons produces no dismiss events.
+- Volume does not pay by itself, in two forms. A layout fitted to patient
+  readers (dense and long) beats maximal random trees for them, so richness
+  does not substitute for fit. And inflating the browsers' fitted layout
+  (every limit to 10, every card given a summary, two meta lines and two
+  buttons) lowers their reward, so clutter and quantity cost something.
 
 ## Baselines and the first finding
 

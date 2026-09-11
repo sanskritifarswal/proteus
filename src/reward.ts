@@ -5,9 +5,9 @@ import type { SessionRecord } from './events.ts';
  *
  * The guardrail from the design notes: never optimise raw engagement alone.
  * So the largest weights sit on completion and on returning, dismissals are
- * a real negative, and the engagement terms saturate (sqrt of opens, capped
- * dwell) so that a screen which farms taps cannot outscore one that gets an
- * article actually read. Weights are a parameter: the local scorer can
+ * a real negative, and the volume terms saturate (square root of opens and
+ * of total completion, capped dwell) so that a screen which farms taps or
+ * piles on content cannot outscore one that fits the reader. Weights are a parameter: the local scorer can
  * shift them per user or expose some to the user directly.
  */
 export interface RewardWeights {
@@ -60,7 +60,7 @@ export function sessionReward(rec: SessionRecord, w: RewardWeights = defaultWeig
   const dwellMin = Math.min(dwellMs / 60000, w.dwellCapMinutes);
   return (
     w.open * Math.sqrt(opens) +
-    w.completion * completion +
+    w.completion * Math.sqrt(completion) +
     w.dwellPerMinute * dwellMin +
     actions +
     w.scrollPast * scrollPast +

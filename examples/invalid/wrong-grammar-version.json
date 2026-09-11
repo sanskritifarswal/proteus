@@ -1,7 +1,10 @@
 {
-  "grammar": "newsfeed@0.0.9",
+  "grammar": "newsfeed@0.1.0",
   "tree": {
     "type": "Screen",
+    "props": {
+      "density": "comfortable"
+    },
     "slots": {
       "sections": [
         {

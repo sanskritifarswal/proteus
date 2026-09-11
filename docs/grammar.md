@@ -1,4 +1,4 @@
-# Proteus component grammar v0.1 — design notes
+# Proteus component grammar v0.2 — design notes
 
 Status: draft, 2026-09-10. Grammar source: [`src/grammars/newsfeed.ts`](../src/grammars/newsfeed.ts).
 Run `npm run check` to regenerate the JSON Schema and validate every example.
@@ -73,7 +73,7 @@ Eight components. Props are string enums; slots list accepted types and cardinal
 
 | Component | Context | Props | Slots | Constraints |
 |---|---|---|---|---|
-| `Screen` (root) | screen | — | `header: Header 0..1` · `sections: Section 1..5` | — |
+| `Screen` (root) | screen | `density: comfortable \| compact` | `header: Header 0..1` · `sections: Section 1..5` | — |
 | `Header` | screen | — | `title: Text 1 (role=title)` · `action: Button 0..1` | — |
 | `Section` | screen | `source: topStories \| forYou \| following \| continueReading \| saved` | `heading: Text 0..1 (role=title\|label)` · `content: Collection 1` · `footer: Button 0..1` — all in **feed** context | — |
 | `Collection` | feed | `layout: stack \| carousel \| grid` · `limit: 3 \| 5 \| 10` | `lead: Card 0..1` · `item: Card 1` — both in **article** context | grid ⇒ item.variant=standard · carousel ⇒ item.variant∈{hero,standard} · grid/carousel ⇒ no lead |
@@ -96,6 +96,10 @@ Design decisions worth calling out:
 - **Slot-level binding restrictions (`childBind`).** Without them a card titled by `readTime` was a
   legal derivation. Counting the space (section 6) is what surfaced this.
 - **Props are string enums, even `limit`.** The bandit sees categorical choices; the renderer parses.
+- **`Screen.density` is the one theme-level knob.** Spacing is otherwise the renderer's, but a global
+  comfortable/compact scale is a real personalisation axis (power readers vs browsers) and it is one
+  choice per screen, so it costs the action space almost nothing. It constrains nothing else in the
+  grammar; the renderer maps it to spacing tokens.
 
 ## 5. Node encoding
 
@@ -112,7 +116,7 @@ Grammar-agnostic shape ([`src/tree.ts`](../src/tree.ts)):
   type (`media?: ImageNode; meta?: TextNode[]`).
 - No `id` field. A node's path (`sections[1].content.item.actions[0]`) is its identity, stable across
   derivations that share structure. That is what per-slot reward attribution will key on later.
-- A tree travels inside an envelope, `{ "grammar": "newsfeed@0.1.0", "tree": { ... } }`. The
+- A tree travels inside an envelope, `{ "grammar": "newsfeed@0.2.0", "tree": { ... } }`. The
   compiled schema pins the exact grammar id, so a renderer refuses a tree derived from any other
   version instead of misrendering it.
 
@@ -126,7 +130,7 @@ Grammar-agnostic shape ([`src/tree.ts`](../src/tree.ts)):
 | `dense-list.json` | power reader | No header; three compact stacks (continue reading, for you ×10 with 1:1 thumbnails + save, following with dismiss); label-style headings |
 | `visual-grid.json` | visual browser | Hero carousel with no heading; For You as a 2-up grid bound to the feed name; Saved as compact rows with dismiss |
 
-### 6.2 Thirteen things it correctly refuses ([`examples/invalid/`](../examples/invalid/))
+### 6.2 Fourteen things it correctly refuses ([`examples/invalid/`](../examples/invalid/))
 
 Each file breaks exactly one rule; the validator reports the offending path and the allowed values.
 
@@ -143,7 +147,8 @@ Each file breaks exactly one rule; the validator reports the offending path and 
 | `three-line-caption` | propIn constraint (caption ⇒ maxLines 1) |
 | `card-inside-card` | slot type acceptance (no recursion) |
 | `too-many-sections` | cardinality |
-| `wrong-grammar-version` | envelope pins the grammar id |
+| `screen-missing-density` | all declared props are required |
+| `wrong-grammar-version` | envelope pins the grammar id (a 0.1.0 tree, which predates `density`) |
 | `missing-envelope` | bare tree without envelope |
 
 ### 6.3 Size of the derivation space (`npm run count`)
@@ -157,7 +162,7 @@ Exact counts, honouring every constraint. Ordered sequences in array slots count
 | `Card@article` | 2.05 M |
 | `Collection@feed` | 1.3 × 10¹³ |
 | `Section@screen` | 8.4 × 10¹⁵ |
-| `Screen@screen` | 7.7 × 10⁸¹ |
+| `Screen@screen` | 1.5 × 10⁸² |
 
 Two consequences for the ML layer, noted here only so the grammar does not paint it into a corner:
 
@@ -172,7 +177,6 @@ Two consequences for the ML layer, noted here only so the grammar does not paint
 - Mixed item templates beyond lead + rest (e.g. alternating layouts).
 - Non-feed blocks between sections: promos, topic chips, "you're all caught up", empty states.
 - Navigation (tabs, bottom bar), search UI, article detail screen.
-- Density / spacing as a choice. Currently the renderer's; could become a `Screen` prop.
 - "Distinct by field" for array slots. `distinct` compiles to JSON Schema `uniqueItems`, which
   rejects `[save, save]` but not `[save ghost, save primary]`. A semantic check or per-slot
   enumeration would close this.
@@ -213,5 +217,5 @@ the on-device scorer must respect.
   to the bandit. Leaning: keep the prop, generate its values from the app's feed registry.
 - Grammar migration: the envelope pins a version, but nothing yet upgrades logged derivations when a slot is added.
 - Whether `maxLines` and `aspect` are presentation choices worth personalising or should be
-  renderer defaults keyed on `variant`. Cutting them shrinks `Card` by roughly 10×.
+  renderer defaults keyed on `variant` and `density`. Cutting them shrinks `Card` by roughly 10×.
 - Reward attribution granularity: per node path, per subtree, or per whole screen.

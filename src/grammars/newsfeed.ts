@@ -15,7 +15,7 @@ import type { Grammar } from '../grammar-types.ts';
  */
 export const newsfeed = {
   name: 'newsfeed',
-  version: '0.1.0',
+  version: '0.2.0',
   root: 'Screen',
   rootContext: 'screen',
 
@@ -57,6 +57,12 @@ export const newsfeed = {
     Screen: {
       description: 'Root. One vertical scroll of sections with an optional header.',
       contexts: ['screen'],
+      props: {
+        density: {
+          description: 'Global spacing scale the renderer applies to every component. A screen-wide presentation choice, not a per-card one.',
+          values: ['comfortable', 'compact'],
+        },
+      },
       slots: {
         header: { accepts: ['Header'], min: 0, max: 1 },
         sections: { accepts: ['Section'], min: 1, max: 5 },

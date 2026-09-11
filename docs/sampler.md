@@ -46,8 +46,12 @@ factored per decision rather than treating derivations as arms.
 
 ## Known limits
 
-- `distinct` slots are sampled by rejection (redraw on an identical child),
-  so a policy that always returns the same choice can fail after 50 tries.
+- For `distinct` slots a duplicate draw is discarded. A stochastic policy
+  gets up to 2n draws to fill n positions; a deterministic policy cannot
+  produce two distinct children, so the slot is truncated to what was drawn.
+  The tree stays valid because every distinct slot in the grammar has min 0.
+- Options with zero complete derivations behind them are filtered before the
+  policy sees a decision, so a policy can only choose completable branches.
 - The `props` decision is a joint choice per node. A finer factoring (one
   decision per prop) would need `propIn` constraints applied incrementally.
 

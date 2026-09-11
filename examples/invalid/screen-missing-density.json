@@ -2,9 +2,7 @@
   "grammar": "newsfeed@0.2.0",
   "tree": {
     "type": "Screen",
-    "props": {
-      "density": "comfortable"
-    },
+    "props": {},
     "slots": {
       "sections": [
         {
@@ -23,7 +21,7 @@
                 "item": {
                   "type": "Card",
                   "props": {
-                    "variant": "standard"
+                    "variant": "compact"
                   },
                   "slots": {
                     "title": {
@@ -32,7 +30,7 @@
                         "role": "title",
                         "maxLines": "2"
                       },
-                      "bind": "readTime"
+                      "bind": "title"
                     }
                   }
                 }

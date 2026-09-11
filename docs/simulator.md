@@ -75,7 +75,8 @@ return probability.
 - Deterministic per seed.
 - Every event names a node in its tree; footer actions only follow an
   impression of that footer (a user who left early cannot use it).
-- Returns at the session cap are censored, never counted.
+- Outcomes at the session cap are censored either way, never counted as a
+  return or as churn.
 - Power readers score higher on the dense list than on the editorial home;
   browsers the reverse. A simulator that fails this cannot tell policies
   apart and is not worth training against.

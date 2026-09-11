@@ -66,9 +66,10 @@ export function runEpisodes(
     for (let s = 0; s < maxSessions; s++) {
       const doc = policy(user, s, rng);
       const rec = simulateSession(user, doc.tree, data, doc.grammar, s, state, rng);
-      // The window ends at maxSessions: a return after the last session is
-      // never observed, so it is censored rather than counted.
-      if (s === maxSessions - 1 && rec.returned) rec.returned = null;
+      // The window ends at maxSessions: whether the user returns after the
+      // last session is never observed either way, so the outcome is
+      // censored rather than counted as a return or as churn.
+      if (s === maxSessions - 1) rec.returned = null;
       traj.sessions.push(rec);
       sessions++;
       totalReward += sessionReward(rec, weights);

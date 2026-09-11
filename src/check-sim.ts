@@ -62,8 +62,9 @@ const report = (ok: boolean, msg: string) => { if (!ok) failures++; console.log(
 {
   const { trajectories, stats } = runEpisodes(fixedScreenPolicy(loadExample('dense-list')), makePopulation(80, makeRng(6)), fakeData, 3, 5);
   const capped = trajectories.filter((t) => t.sessions.length === 3);
-  const leaked = capped.filter((t) => t.sessions[2].returned === true).length;
-  report(capped.length > 0 && leaked === 0 && stats.observedSessions < stats.sessions, `returns at the session cap are censored (${capped.length} capped episodes, ${leaked} leaked; ${stats.observedSessions}/${stats.sessions} observed)`);
+  const leaked = capped.filter((t) => t.sessions[2].returned !== null).length;
+  const early = trajectories.filter((t) => t.sessions.length < 3).every((t) => t.sessions.at(-1)!.returned === false);
+  report(capped.length > 0 && leaked === 0 && early && stats.observedSessions === stats.sessions - capped.length, `outcomes at the session cap are censored either way (${capped.length} capped episodes, ${leaked} leaked; ${stats.observedSessions}/${stats.sessions} observed)`);
 }
 
 // Footers: a footer action only ever follows an impression of that footer.

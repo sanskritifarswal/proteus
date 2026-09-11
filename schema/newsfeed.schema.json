@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "newsfeed@0.1.0 UI document",
+  "title": "newsfeed@0.2.0 UI document",
   "description": "Generated from the 'newsfeed' grammar. Root: Screen in context 'screen'.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "grammar": {
-      "const": "newsfeed@0.1.0",
+      "const": "newsfeed@0.2.0",
       "description": "Grammar this tree was derived from."
     },
     "tree": {
@@ -25,6 +25,22 @@
       "properties": {
         "type": {
           "const": "Screen"
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "density": {
+              "description": "Global spacing scale the renderer applies to every component. A screen-wide presentation choice, not a per-card one.",
+              "enum": [
+                "comfortable",
+                "compact"
+              ]
+            }
+          },
+          "required": [
+            "density"
+          ]
         },
         "slots": {
           "type": "object",
@@ -49,6 +65,7 @@
       },
       "required": [
         "type",
+        "props",
         "slots"
       ]
     },

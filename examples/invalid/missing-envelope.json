@@ -1,5 +1,8 @@
 {
   "type": "Screen",
+  "props": {
+    "density": "comfortable"
+  },
   "slots": {
     "sections": [
       {

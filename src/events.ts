@@ -24,15 +24,25 @@ export type EventType =
   | 'action'       // a Button was used (action)
   | 'session_end'; // t = session length in ms
 
-export interface UIEvent {
+interface Base {
   /** ms since session start. */
   t: number;
-  type: EventType;
+  /** Tree path of the node the event happened on. */
   path: string;
-  article?: string;
-  action?: string;
-  value?: number;
 }
+
+/** Discriminated by `type`, so each payload's required fields are enforced. */
+export type UIEvent =
+  | (Base & { type: 'impression'; article?: string })
+  | (Base & { type: 'open'; article: string })
+  | (Base & { type: 'dwell'; article: string; value: number })
+  | (Base & { type: 'complete'; article: string; value: number })
+  | (Base & { type: 'scroll_past'; article: string })
+  | (Base & { type: 'action'; action: string; article?: string })
+  | (Base & { type: 'session_end' });
+
+/** A UIEvent without its timestamp, distributed over the union. */
+export type UIEventInput = UIEvent extends infer E ? (E extends UIEvent ? Omit<E, 't'> : never) : never;
 
 export interface SessionRecord {
   user: string;
@@ -40,8 +50,12 @@ export interface SessionRecord {
   grammar: string;
   tree: UINode;
   events: UIEvent[];
-  /** Whether the user came back for a next session. Filled in when known. */
-  returned: boolean;
+  /**
+   * Whether the user came back for a next session. `null` when unobserved:
+   * the session was the last one inside the observation window, so the
+   * outcome is censored, not false. Reward treats null as no return bonus.
+   */
+  returned: boolean | null;
 }
 
 export interface Trajectory {

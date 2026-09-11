@@ -54,8 +54,38 @@ const report = (ok: boolean, msg: string) => { if (!ok) failures++; console.log(
 // Availability matters: with no dismiss button anywhere, no dismiss events.
 {
   const { trajectories } = runEpisodes(fixedScreenPolicy(loadExample('editorial-home')), makePopulation(50, makeRng(3)), fakeData, 3, 4);
-  const dismissals = trajectories.flatMap((t) => t.sessions).flatMap((s) => s.events).filter((e) => e.action === 'dismiss').length;
+  const dismissals = trajectories.flatMap((t) => t.sessions).flatMap((s) => s.events).filter((e) => e.type === 'action' && e.action === 'dismiss').length;
   report(dismissals === 0, 'a tree without dismiss buttons produces no dismiss events');
+}
+
+// Censoring: the last session of a capped episode never claims an observed return.
+{
+  const { trajectories, stats } = runEpisodes(fixedScreenPolicy(loadExample('dense-list')), makePopulation(80, makeRng(6)), fakeData, 3, 5);
+  const capped = trajectories.filter((t) => t.sessions.length === 3);
+  const leaked = capped.filter((t) => t.sessions[2].returned === true).length;
+  report(capped.length > 0 && leaked === 0 && stats.observedSessions < stats.sessions, `returns at the session cap are censored (${capped.length} capped episodes, ${leaked} leaked; ${stats.observedSessions}/${stats.sessions} observed)`);
+}
+
+// Footers: a footer action only ever follows an impression of that footer.
+{
+  const { trajectories } = runEpisodes(randomScreenPolicy('local'), makePopulation(80, makeRng(8)), fakeData, 4, 12);
+  let footerActions = 0;
+  let unseen = 0;
+  for (const t of trajectories) for (const s of t.sessions) {
+    const seen = new Set<string>();
+    for (const e of s.events) {
+      if (e.type === 'impression') seen.add(e.path);
+      if (e.type === 'action' && e.path.endsWith('.footer')) { footerActions++; if (!seen.has(e.path)) unseen++; }
+    }
+  }
+  report(footerActions > 0 && unseen === 0, `footer actions only on footers the user reached (${footerActions} actions, ${unseen} unseen)`);
+}
+
+// Empty population is rejected instead of producing NaN.
+{
+  let threw = false;
+  try { runEpisodes(randomScreenPolicy('local'), [], fakeData, 3, 1); } catch { threw = true; }
+  report(threw, 'empty population is rejected');
 }
 
 console.log(failures ? `\n${failures} simulator check(s) failed` : '\nsimulator checks passed');

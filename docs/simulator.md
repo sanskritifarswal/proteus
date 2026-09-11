@@ -38,8 +38,12 @@ names a node by path and, where relevant, the article.
 | `action` | a Button was used | action = save, share, follow, dismiss, seeMore, … |
 | `session_end` | end of session | t = length in ms |
 
-Plus `returned` on the session record. Completion, dismissal and return are
-in the format from day one so that a composite reward is the easy path.
+Plus `returned` on the session record: `true`, `false`, or `null` when the
+session was the last inside the observation window and the outcome is
+unobserved (censored, not false). Completion, dismissal and return are in
+the format from day one so that a composite reward is the easy path. The
+event type is a discriminated union, so each payload's required fields are
+enforced by `tsc`.
 
 ## Reward (`src/reward.ts`)
 
@@ -69,7 +73,9 @@ return probability.
 ## Checks (`npm run check` runs `src/check-sim.ts`)
 
 - Deterministic per seed.
-- Every event names a node in its tree.
+- Every event names a node in its tree; footer actions only follow an
+  impression of that footer (a user who left early cannot use it).
+- Returns at the session cap are censored, never counted.
 - Power readers score higher on the dense list than on the editorial home;
   browsers the reverse. A simulator that fails this cannot tell policies
   apart and is not worth training against.
@@ -85,15 +91,16 @@ Mixed population, 300 users, up to 10 sessions, seed 1:
 
 | policy | episode reward | sessions/user | return | opens/session |
 |---|---|---|---|---|
-| random-local | 59.7 | 4.40 | 81% | 3.6 |
-| random-uniform | 76.5 | 4.91 | 85% | 4.2 |
-| fixed-editorial-home | 45.7 | 4.30 | 81% | 2.9 |
-| fixed-dense-list | 59.5 | 4.48 | 83% | 3.4 |
-| fixed-visual-grid | 57.7 | 4.44 | 82% | 3.8 |
+| random-local | 59.0 | 4.38 | 80% | 3.6 |
+| random-uniform | 72.3 | 4.71 | 83% | 4.2 |
+| fixed-editorial-home | 45.2 | 4.30 | 80% | 2.9 |
+| fixed-dense-list | 58.6 | 4.43 | 81% | 3.4 |
+| fixed-visual-grid | 57.1 | 4.44 | 81% | 3.8 |
 
-Per-archetype runs go the right way: power readers score 149 on the dense
-list versus 88 on the editorial home; browsers 38 on the visual grid versus
-17 on the dense list. So the simulator separates layouts by audience, which
+Return rate is over observed sessions only; the last session of a capped
+episode is censored. Per-archetype runs go the right way: power readers
+score 147 on the dense list versus 87 on the editorial home; browsers 38 on
+the visual grid versus 16 on the dense list. So the simulator separates layouts by audience, which
 is the property a policy needs.
 
 **The finding:** exact-uniform random trees, which are almost always maximal

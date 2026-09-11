@@ -1,5 +1,5 @@
 import type { UINode } from '../tree.ts';
-import type { UIEvent, SessionRecord } from '../events.ts';
+import type { UIEvent, UIEventInput, SessionRecord } from '../events.ts';
 import type { FeedData } from '../fake-data.ts';
 import type { Rng } from '../rng.ts';
 import type { SimUser } from './users.ts';
@@ -35,12 +35,13 @@ interface Exposure {
   source: string;
   layout: string;
   positionInSection: number;
+  section: number;
 }
 
 /** Everything the user could see, in the order they'd scroll past it. */
-function exposures(tree: UINode, data: FeedData): { list: Exposure[]; footers: Array<{ path: string; source: string; action: string }> } {
+function exposures(tree: UINode, data: FeedData): { list: Exposure[]; footers: Array<{ path: string; source: string; action: string; section: number }> } {
   const list: Exposure[] = [];
-  const footers: Array<{ path: string; source: string; action: string }> = [];
+  const footers: Array<{ path: string; source: string; action: string; section: number }> = [];
   const sections = (tree.slots?.sections as UINode[]) ?? [];
   sections.forEach((sec, si) => {
     const source = sec.props!.source;
@@ -55,11 +56,11 @@ function exposures(tree: UINode, data: FeedData): { list: Exposure[]; footers: A
       list.push({
         path: useLead ? `${base}.lead` : `${base}.item`,
         card: useLead ? lead! : item,
-        articleIdx: i, source, layout: coll.props!.layout, positionInSection: i,
+        articleIdx: i, source, layout: coll.props!.layout, positionInSection: i, section: si,
       });
     }
     const footer = sec.slots?.footer as UINode | undefined;
-    if (footer) footers.push({ path: `sections[${si}].footer`, source, action: footer.props!.action });
+    if (footer) footers.push({ path: `sections[${si}].footer`, source, action: footer.props!.action, section: si });
   });
   return { list, footers };
 }
@@ -91,7 +92,7 @@ export function simulateSession(
 ): SessionRecord {
   const events: UIEvent[] = [];
   let t = 0;
-  const push = (e: Omit<UIEvent, 't'>) => events.push({ t, ...e });
+  const push = (e: UIEventInput) => events.push({ t, ...e } as UIEvent);
 
   // Density fit stretches or shrinks how far they scroll.
   const density = tree.props!.density === 'comfortable' ? 1 : -1;
@@ -106,15 +107,23 @@ export function simulateSession(
   let scrolledPast = 0;
   const openedThisSession = new Set<string>();
   const seenThisSession = new Set<string>();
+  // Sections whose end the user scrolled to. A footer below content they
+  // never reached cannot be used.
+  const reachedEndOf = new Set<number>();
+  let left = false;
 
-  for (const x of list) {
+  for (let i = 0; i < list.length && !left; i++) {
+    const x = list[i];
+    const lastInSection = i === list.length - 1 || list[i + 1].section !== x.section;
     position += x.layout === 'grid' ? 0.5 : x.layout === 'carousel' ? (x.positionInSection < 2 ? 0.6 : 1.4) : 1;
     // Chance they are still scrolling and actually look at this item.
     const stillHere = Math.exp(-position / budget);
     if (rng.next() > stillHere) {
-      if (position > 2.5 * budget) break;
+      if (position > 2.5 * budget) { left = true; break; }
+      if (lastInSection) reachedEndOf.add(x.section);
       continue;
     }
+    if (lastInSection) reachedEndOf.add(x.section);
     const article = data.feeds[x.source].articles[x.articleIdx];
     const dup = seenThisSession.has(article.title);
     seenThisSession.add(article.title);
@@ -154,6 +163,8 @@ export function simulateSession(
   }
 
   for (const f of footers) {
+    if (!reachedEndOf.has(f.section)) continue;
+    push({ type: 'impression', path: f.path });
     if (f.action === 'seeMore' && rng.next() < 0.08 * (1 + (SOURCE_BOOST[f.source] ?? 0))) push({ type: 'action', path: f.path, action: 'seeMore' });
   }
 

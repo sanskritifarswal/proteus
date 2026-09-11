@@ -30,11 +30,11 @@ Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/s
 
 ## Commands
 
-Node 24+ (runs TypeScript directly, no build step).
+Node 24+ (runs TypeScript directly, no build step; `tsc` is used only to type-check).
 
 ```bash
 npm install
-npm run check    # regenerate schema, validate all examples, check the sampler
+npm run check    # type-check, regenerate schema, validate examples, check sampler and simulator
 npm run schema   # regenerate schema + grammar JSON export
 npm run count    # derivation-space sizes
 npm run sample -- --seed 1 --n 3 --policy local   # print sampled UI documents

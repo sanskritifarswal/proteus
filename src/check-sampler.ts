@@ -1,4 +1,5 @@
-import Ajv2020 from 'ajv/dist/2020.js';
+import ajv2020 from 'ajv/dist/2020.js';
+const Ajv2020 = ajv2020.default;
 import { compileSchema } from './compile-schema.ts';
 import { makeRng } from './rng.ts';
 import { localUniform, sample, uniformDerivation, type Policy } from './sample.ts';

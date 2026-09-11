@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import Ajv2020 from 'ajv/dist/2020.js';
+import ajv2020 from 'ajv/dist/2020.js';
+const Ajv2020 = ajv2020.default;
 import { compileSchema, grammarId } from './compile-schema.ts';
 import { newsfeed } from './grammars/newsfeed.ts';
 

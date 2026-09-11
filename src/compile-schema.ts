@@ -2,6 +2,11 @@ import type { Grammar, ComponentDef, SlotDef, Constraint, Condition } from './gr
 
 type J = Record<string, unknown>;
 
+/** Stable identifier a document uses to name the grammar it was derived from. */
+export function grammarId(g: Grammar): string {
+  return `${g.name}@${g.version}`;
+}
+
 /**
  * Compile a Grammar into a JSON Schema (draft 2020-12) for its UI trees.
  *
@@ -41,9 +46,15 @@ export function compileSchema(g: Grammar): J {
 
   return {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
-    title: `${g.name} ${g.version} UI tree`,
+    title: `${grammarId(g)} UI document`,
     description: `Generated from the '${g.name}' grammar. Root: ${g.root} in context '${g.rootContext}'.`,
-    $ref: `#/$defs/${g.root}@${g.rootContext}`,
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      grammar: { const: grammarId(g), description: 'Grammar this tree was derived from.' },
+      tree: { $ref: `#/$defs/${g.root}@${g.rootContext}` },
+    },
+    required: ['grammar', 'tree'],
     $defs: defs,
   };
 }

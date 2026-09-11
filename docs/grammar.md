@@ -112,8 +112,9 @@ Grammar-agnostic shape ([`src/tree.ts`](../src/tree.ts)):
   type (`media?: ImageNode; meta?: TextNode[]`).
 - No `id` field. A node's path (`sections[1].content.item.actions[0]`) is its identity, stable across
   derivations that share structure. That is what per-slot reward attribution will key on later.
-- A tree should eventually travel with its grammar version (`{ grammar: "newsfeed@0.1.0", tree }`)
-  so a renderer can refuse a tree compiled against a different grammar. Not added yet.
+- A tree travels inside an envelope, `{ "grammar": "newsfeed@0.1.0", "tree": { ... } }`. The
+  compiled schema pins the exact grammar id, so a renderer refuses a tree derived from any other
+  version instead of misrendering it.
 
 ## 6. Sanity checks
 
@@ -125,7 +126,7 @@ Grammar-agnostic shape ([`src/tree.ts`](../src/tree.ts)):
 | `dense-list.json` | power reader | No header; three compact stacks (continue reading, for you ×10 with 1:1 thumbnails + save, following with dismiss); label-style headings |
 | `visual-grid.json` | visual browser | Hero carousel with no heading; For You as a 2-up grid bound to the feed name; Saved as compact rows with dismiss |
 
-### 6.2 Eleven things it correctly refuses ([`examples/invalid/`](../examples/invalid/))
+### 6.2 Thirteen things it correctly refuses ([`examples/invalid/`](../examples/invalid/))
 
 Each file breaks exactly one rule; the validator reports the offending path and the allowed values.
 
@@ -142,6 +143,8 @@ Each file breaks exactly one rule; the validator reports the offending path and 
 | `three-line-caption` | propIn constraint (caption ⇒ maxLines 1) |
 | `card-inside-card` | slot type acceptance (no recursion) |
 | `too-many-sections` | cardinality |
+| `wrong-grammar-version` | envelope pins the grammar id |
+| `missing-envelope` | bare tree without envelope |
 
 ### 6.3 Size of the derivation space (`npm run count`)
 
@@ -208,7 +211,7 @@ the on-device scorer must respect.
 - Should `Section.source` be a prop (as now) or a binding into a `feeds` collection on the screen
   context? A binding generalises to arbitrary developer-defined feeds; a prop keeps the enum visible
   to the bandit. Leaning: keep the prop, generate its values from the app's feed registry.
-- Grammar versioning and migration: what happens to logged derivations when a slot is added.
+- Grammar migration: the envelope pins a version, but nothing yet upgrades logged derivations when a slot is added.
 - Whether `maxLines` and `aspect` are presentation choices worth personalising or should be
   renderer defaults keyed on `variant`. Cutting them shrinks `Card` by roughly 10×.
 - Reward attribution granularity: per node path, per subtree, or per whole screen.

@@ -12,7 +12,7 @@ Read [docs/grammar.md](docs/grammar.md) for the design.
 |---|---|
 | `src/grammar-types.ts` | Meta-types: what any Proteus grammar looks like |
 | `src/grammars/newsfeed.ts` | Starter grammar: reading/news feed home screen |
-| `src/tree.ts` | Grammar-agnostic UI tree node type |
+| `src/tree.ts` | Grammar-agnostic UI document (grammar id + tree) and node types |
 | `src/compile-schema.ts` | Grammar → JSON Schema compiler (also type-checks the grammar) |
 | `src/validate.ts` | Validates `examples/valid` (must pass) and `examples/invalid` (must fail) |
 | `src/count-space.ts` | Exact count of derivations the grammar admits |

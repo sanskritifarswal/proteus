@@ -1,82 +1,185 @@
 {
-  "type": "Screen",
-  "slots": {
-    "header": {
-      "type": "Header",
-      "slots": {
-        "title": { "type": "Text", "props": { "role": "title", "maxLines": "1" }, "key": "header.forYou" },
-        "action": { "type": "Button", "props": { "action": "refresh", "style": "ghost" } }
-      }
-    },
-    "sections": [
-      {
-        "type": "Section",
-        "props": { "source": "topStories" },
+  "grammar": "newsfeed@0.1.0",
+  "tree": {
+    "type": "Screen",
+    "slots": {
+      "header": {
+        "type": "Header",
         "slots": {
-          "content": {
-            "type": "Collection",
-            "props": { "layout": "carousel", "limit": "5" },
-            "slots": {
-              "item": {
-                "type": "Card",
-                "props": { "variant": "hero" },
-                "slots": {
-                  "media": { "type": "Image", "props": { "aspect": "16:9" }, "bind": "imageUrl" },
-                  "title": { "type": "Text", "props": { "role": "title", "maxLines": "2" }, "bind": "title" },
-                  "meta": [
-                    { "type": "Text", "props": { "role": "caption", "maxLines": "1" }, "bind": "source" }
-                  ]
-                }
-              }
+          "title": {
+            "type": "Text",
+            "props": {
+              "role": "title",
+              "maxLines": "1"
+            },
+            "key": "header.forYou"
+          },
+          "action": {
+            "type": "Button",
+            "props": {
+              "action": "refresh",
+              "style": "ghost"
             }
           }
         }
       },
-      {
-        "type": "Section",
-        "props": { "source": "forYou" },
-        "slots": {
-          "heading": { "type": "Text", "props": { "role": "title", "maxLines": "1" }, "bind": "name" },
-          "content": {
-            "type": "Collection",
-            "props": { "layout": "grid", "limit": "10" },
-            "slots": {
-              "item": {
-                "type": "Card",
-                "props": { "variant": "standard" },
-                "slots": {
-                  "media": { "type": "Image", "props": { "aspect": "1:1" }, "bind": "imageUrl" },
-                  "title": { "type": "Text", "props": { "role": "title", "maxLines": "2" }, "bind": "title" }
+      "sections": [
+        {
+          "type": "Section",
+          "props": {
+            "source": "topStories"
+          },
+          "slots": {
+            "content": {
+              "type": "Collection",
+              "props": {
+                "layout": "carousel",
+                "limit": "5"
+              },
+              "slots": {
+                "item": {
+                  "type": "Card",
+                  "props": {
+                    "variant": "hero"
+                  },
+                  "slots": {
+                    "media": {
+                      "type": "Image",
+                      "props": {
+                        "aspect": "16:9"
+                      },
+                      "bind": "imageUrl"
+                    },
+                    "title": {
+                      "type": "Text",
+                      "props": {
+                        "role": "title",
+                        "maxLines": "2"
+                      },
+                      "bind": "title"
+                    },
+                    "meta": [
+                      {
+                        "type": "Text",
+                        "props": {
+                          "role": "caption",
+                          "maxLines": "1"
+                        },
+                        "bind": "source"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "Section",
+          "props": {
+            "source": "forYou"
+          },
+          "slots": {
+            "heading": {
+              "type": "Text",
+              "props": {
+                "role": "title",
+                "maxLines": "1"
+              },
+              "bind": "name"
+            },
+            "content": {
+              "type": "Collection",
+              "props": {
+                "layout": "grid",
+                "limit": "10"
+              },
+              "slots": {
+                "item": {
+                  "type": "Card",
+                  "props": {
+                    "variant": "standard"
+                  },
+                  "slots": {
+                    "media": {
+                      "type": "Image",
+                      "props": {
+                        "aspect": "1:1"
+                      },
+                      "bind": "imageUrl"
+                    },
+                    "title": {
+                      "type": "Text",
+                      "props": {
+                        "role": "title",
+                        "maxLines": "2"
+                      },
+                      "bind": "title"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "Section",
+          "props": {
+            "source": "saved"
+          },
+          "slots": {
+            "heading": {
+              "type": "Text",
+              "props": {
+                "role": "title",
+                "maxLines": "1"
+              },
+              "key": "section.saved"
+            },
+            "content": {
+              "type": "Collection",
+              "props": {
+                "layout": "stack",
+                "limit": "5"
+              },
+              "slots": {
+                "item": {
+                  "type": "Card",
+                  "props": {
+                    "variant": "compact"
+                  },
+                  "slots": {
+                    "media": {
+                      "type": "Image",
+                      "props": {
+                        "aspect": "1:1"
+                      },
+                      "bind": "imageUrl"
+                    },
+                    "title": {
+                      "type": "Text",
+                      "props": {
+                        "role": "title",
+                        "maxLines": "2"
+                      },
+                      "bind": "title"
+                    },
+                    "actions": [
+                      {
+                        "type": "Button",
+                        "props": {
+                          "action": "dismiss",
+                          "style": "ghost"
+                        }
+                      }
+                    ]
+                  }
                 }
               }
             }
           }
         }
-      },
-      {
-        "type": "Section",
-        "props": { "source": "saved" },
-        "slots": {
-          "heading": { "type": "Text", "props": { "role": "title", "maxLines": "1" }, "key": "section.saved" },
-          "content": {
-            "type": "Collection",
-            "props": { "layout": "stack", "limit": "5" },
-            "slots": {
-              "item": {
-                "type": "Card",
-                "props": { "variant": "compact" },
-                "slots": {
-                  "media": { "type": "Image", "props": { "aspect": "1:1" }, "bind": "imageUrl" },
-                  "title": { "type": "Text", "props": { "role": "title", "maxLines": "2" }, "bind": "title" },
-                  "actions": [
-                    { "type": "Button", "props": { "action": "dismiss", "style": "ghost" } }
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    ]
+      ]
+    }
   }
 }

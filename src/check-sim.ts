@@ -54,16 +54,21 @@ const report = (ok: boolean, msg: string) => { if (!ok) failures++; console.log(
 // Volume must not pay by itself. Two forms of the claim:
 //  (a) a layout fitted to patient readers (dense and long) beats maximal
 //      random trees for them, so richness does not substitute for fit;
-//  (b) for impatient visual readers, inflating their fitted layout (every
-//      limit to 10, every card given a summary, two meta lines and two
-//      buttons) lowers their reward, so clutter and quantity cost something.
-// If either fails, the reward or the user model pays for sheer quantity,
+//  (b) for impatient visual readers, raising every limit on their fitted
+//      layout to 10 does not raise their reward (quantity alone pays
+//      nothing), and separately, loading every card with a summary, two meta
+//      lines and two buttons lowers it (clutter costs something).
+// If any fails, the reward or the user model pays for sheer quantity,
 // which is the incentive the design guardrail forbids.
-function inflate(doc: UIDocument): UIDocument {
+function inflateLimits(doc: UIDocument): UIDocument {
+  const d = JSON.parse(JSON.stringify(doc)) as UIDocument;
+  for (const sec of d.tree.slots!.sections as UINode[]) (sec.slots!.content as UINode).props!.limit = '10';
+  return d;
+}
+function inflateCards(doc: UIDocument): UIDocument {
   const d = JSON.parse(JSON.stringify(doc)) as UIDocument;
   for (const sec of d.tree.slots!.sections as UINode[]) {
     const coll = sec.slots!.content as UINode;
-    coll.props!.limit = '10';
     for (const key of ['lead', 'item'] as const) {
       const card = coll.slots?.[key] as UINode | undefined;
       if (!card) continue;
@@ -92,8 +97,10 @@ function inflate(doc: UIDocument): UIDocument {
   report(pd > pm, `fitted layout beats maximal random trees for power readers (dense-list x10 ${pd.toFixed(1)} vs maximal ${pm.toFixed(1)})`);
   const grid = loadExample('visual-grid');
   const bg = runEpisodes(fixedScreenPolicy(grid), browsers, fakeData, 8, 13).stats.meanEpisodeReward;
-  const bi = runEpisodes(fixedScreenPolicy(inflate(grid)), browsers, fakeData, 8, 13).stats.meanEpisodeReward;
-  report(bg > bi, `inflating the fitted layout lowers reward for browsers (visual-grid ${bg.toFixed(1)} vs inflated ${bi.toFixed(1)})`);
+  const bl = runEpisodes(fixedScreenPolicy(inflateLimits(grid)), browsers, fakeData, 8, 13).stats.meanEpisodeReward;
+  const bc = runEpisodes(fixedScreenPolicy(inflateCards(grid)), browsers, fakeData, 8, 13).stats.meanEpisodeReward;
+  report(bl <= bg * 1.02, `raising every limit to 10 does not raise reward for browsers (visual-grid ${bg.toFixed(1)} vs limits x10 ${bl.toFixed(1)})`);
+  report(bc < bg, `loading every card lowers reward for browsers (visual-grid ${bg.toFixed(1)} vs loaded cards ${bc.toFixed(1)})`);
 }
 
 // Availability matters: with no dismiss button anywhere, no dismiss events.

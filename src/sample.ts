@@ -14,6 +14,7 @@ import type { Rng } from './rng.ts';
  *
  *   props    which prop assignment a node takes (one joint choice per node)
  *   arity    how many children a slot gets
+ *   value    for a distinctBy slot, which value of the field the next child takes
  *   type     which component type fills a child position
  *   content  which field binding or string key a leaf shows
  *
@@ -29,7 +30,7 @@ import type { Rng } from './rng.ts';
  * it leads to, giving exactly uniform sampling over the whole space.
  */
 export interface Decision {
-  kind: 'props' | 'arity' | 'type' | 'content';
+  kind: 'props' | 'arity' | 'value' | 'type' | 'content';
   /** Tree path, e.g. "sections[1].content.item.meta[0]". "" is the root. */
   path: string;
   component: string;
@@ -133,10 +134,19 @@ function sampleNode(
         let restrict = b.restrict;
         let bindRestrict = sdef.childBind;
         if (buckets) {
-          const remaining = buckets.filter(([v, c]) => c > 0n && !usedValues.has(v)).map(([v]) => v);
+          const remaining = buckets.filter(([v, c]) => c > 0n && !usedValues.has(v));
           if (remaining.length === 0) break;
-          if (sdef.distinctBy === 'bind') bindRestrict = remaining;
-          else restrict = { ...restrict, [sdef.distinctBy!]: remaining };
+          // Weight = this bucket's completions x ways to fill the positions
+          // still to come from the other remaining buckets. Weighting by the
+          // bucket alone would over-select large buckets first.
+          const left = n - k - 1;
+          const chosen = remaining[decide(policy, {
+            kind: 'value', path: childPath, component: name, context: ctx,
+            options: remaining.map(([v]) => v),
+            weights: remaining.map(([v, c]) => c * distinctTupleWays(remaining.filter(([w]) => w !== v).map(([, cw]) => cw), left)),
+          })][0];
+          if (sdef.distinctBy === 'bind') bindRestrict = [chosen];
+          else restrict = { ...restrict, [sdef.distinctBy!]: [chosen] };
         }
         const type = sdef.accepts.length === 1
           ? sdef.accepts[0]

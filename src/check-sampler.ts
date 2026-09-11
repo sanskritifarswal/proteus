@@ -77,6 +77,68 @@ const trap: Grammar = {
   console.log(`${bad ? 'FAIL' : 'PASS'}  zero-completion options are never offered (${100 - bad}/100 trap samples valid)`);
 }
 
+// distinctBy with unequal buckets: two required positions, bucket sizes 100
+// (small: one label src x 100 keys) and 200 (large: two src x 100 keys).
+// Both orders (small,large) and (large,small) contain 100*200 complete
+// derivations, so uniformDerivation must start with the small bucket ~50%.
+// Weighting by bucket size alone would start small only 100/300 = 33%.
+const skew: Grammar = {
+  name: 'skew', version: '0.0.1', root: 'Row', rootContext: 'c',
+  contexts: { c: { description: '', fields: { t: 'text' } } },
+  strings: Array.from({ length: 100 }, (_, i) => `k${i}`),
+  components: {
+    Row: {
+      description: '', contexts: ['c'],
+      slots: { cells: { accepts: ['Cell'], min: 2, max: 2, distinctBy: 'kind' } },
+    },
+    Cell: {
+      description: '', contexts: ['c'],
+      props: { kind: { values: ['small', 'large'] } },
+      slots: { label: { accepts: ['Text'], min: 1, max: 1 } },
+      constraints: [{ when: { prop: 'kind', is: 'small' }, childProps: { slot: 'label', prop: 'src', in: ['field'] } }],
+    },
+    Text: {
+      description: '', contexts: ['c'],
+      props: { src: { values: ['field', 'key'] } },
+      content: { keys: true },
+    },
+  },
+};
+{
+  const policy = uniformDerivation(makeRng(11));
+  const N2 = 2000;
+  let smallFirst = 0;
+  const vSkew = ajv.compile(compileSchema(skew));
+  let bad = 0;
+  for (let i = 0; i < N2; i++) {
+    const doc = sample(skew, policy);
+    if (!vSkew(doc)) bad++;
+    const cells = doc.tree.slots!.cells as Array<{ props?: Record<string, string> }>;
+    if (cells[0].props!.kind === 'small') smallFirst++;
+  }
+  const frac = smallFirst / N2;
+  const ok = bad === 0 && frac > 0.45 && frac < 0.55;
+  if (!ok) failures++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  distinctBy sampling is unbiased with unequal buckets (small-first ${(frac * 100).toFixed(1)}%, expect ~50%; ${bad} invalid)`);
+}
+
+// The compiler must reject distinctBy 'bind' when children may carry keys.
+{
+  const badGrammar: Grammar = {
+    name: 'bad', version: '0.0.1', root: 'Row', rootContext: 'c',
+    contexts: { c: { description: '', fields: { a: 'text', b: 'text' } } },
+    strings: ['k'],
+    components: {
+      Row: { description: '', contexts: ['c'], slots: { cells: { accepts: ['Text'], min: 0, max: 2, distinctBy: 'bind' } } },
+      Text: { description: '', contexts: ['c'], content: { bind: ['text'], keys: true } },
+    },
+  };
+  let rejected = false;
+  try { compileSchema(badGrammar); } catch (e) { rejected = /distinctBy 'bind' requires childContent/.test((e as Error).message); }
+  if (!rejected) failures++;
+  console.log(`${rejected ? 'PASS' : 'FAIL'}  compiler rejects distinctBy 'bind' without childContent 'bind'`);
+}
+
 const a = JSON.stringify(Array.from({ length: 5 }, () => sample(newsfeed, localUniform(makeRng(7)))));
 const b = JSON.stringify(Array.from({ length: 5 }, () => sample(newsfeed, localUniform(makeRng(7)))));
 const c = JSON.stringify(Array.from({ length: 5 }, () => sample(newsfeed, localUniform(makeRng(8)))));

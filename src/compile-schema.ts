@@ -99,6 +99,13 @@ function compileComponent(
     const sreq: string[] = [];
     for (const [sname, sdef] of Object.entries(comp.slots)) {
       const cctx = sdef.context ?? ctx;
+      if (sdef.distinctBy) {
+        if (sdef.max <= 1) throw new Error(`${name}.${sname}: distinctBy needs an array slot (max > 1)`);
+        if (sdef.distinctBy === 'bind' && sdef.childContent !== 'bind') {
+          throw new Error(`${name}.${sname}: distinctBy 'bind' requires childContent: 'bind' so every child carries a binding`);
+        }
+        distinctByValues(g, name, sname, sdef, cctx); // throws on an unknown prop or an empty value set
+      }
       const alts = sdef.accepts.map((child) => {
         visit(child, cctx);
         return childRef(g, name, sname, child, cctx, sdef);

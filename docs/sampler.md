@@ -15,6 +15,7 @@ plug into: it never has to know the grammar, only how to choose.
 |---|---|---|---|
 | `props` | every node with props | the valid joint prop assignments (after `propIn` constraints) | Card: `{variant: hero}`, `{variant: standard}`, `{variant: compact}` |
 | `arity` | every slot | legal child counts after constraints | `Card.meta`: 0, 1, 2 |
+| `value` | every position of a `distinctBy` slot | values of the field not yet used | `Screen.sections[1]`: the four feeds not already on screen |
 | `type` | every child position in a slot accepting more than one type | accepted component types | (none in the newsfeed grammar yet) |
 | `content` | every leaf | `bind:<field>` and `key:<string>` legal in this context | `Text@article` title slot: `bind:title` |
 
@@ -46,8 +47,11 @@ factored per decision rather than treating derivations as arms.
 
 ## Known limits
 
-- For `distinctBy` slots the values already used are removed from later
-  draws, so children differ by construction and any policy fills the slot.
+- For `distinctBy` slots each position starts with a `value` decision over
+  the unused values, weighted by that bucket's completions times the ways to
+  fill the remaining positions, so `uniformDerivation` stays exact when
+  buckets are unequal. Children differ by construction and any policy fills
+  the slot.
 - For plain `distinct` slots a duplicate draw is discarded. A stochastic policy
   gets up to 2n draws to fill n positions; a deterministic policy cannot
   produce two distinct children, so the slot is truncated to what was drawn.

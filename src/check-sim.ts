@@ -3,6 +3,7 @@ import { fakeData } from './fake-data.ts';
 import { nodePaths, type UIDocument, type UINode } from './tree.ts';
 import { makePopulation } from './sim/users.ts';
 import { fixedScreenPolicy, loadExample, randomScreenPolicy, runEpisodes } from './sim/episodes.ts';
+import { defaultWeights, sessionReward } from './reward.ts';
 
 /**
  * Simulator sanity checks: deterministic per seed, every event names a real
@@ -132,6 +133,13 @@ function inflateCards(doc: UIDocument): UIDocument {
     }
   }
   report(footerActions > 0 && unseen === 0, `footer actions only on footers the user reached (${footerActions} actions, ${unseen} unseen)`);
+}
+
+// Invalid reward weights are rejected instead of producing NaN.
+{
+  let threw = false;
+  try { sessionReward({ user: 'u', session: 0, grammar: 'g', tree: { type: 'Screen' }, events: [], returned: null }, { ...defaultWeights, save: -1 }); } catch { threw = true; }
+  report(threw, 'a negative positive-action weight is rejected');
 }
 
 // Empty population is rejected instead of producing NaN.

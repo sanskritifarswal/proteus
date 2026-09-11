@@ -147,7 +147,8 @@ export function simulateSession(
     t += 800 + rng.int(700);
     push({ type: 'impression', path: x.path, article: article.title });
     impressions++;
-    clutterSeen += buttonActions(x.card).length + (x.card.slots?.summary ? 1 : 0);
+    // Buttons and a summary are full elements; a meta line is a small one.
+    clutterSeen += buttonActions(x.card).length + (x.card.slots?.summary ? 1 : 0) + 0.5 * ((x.card.slots?.meta as UINode[] | undefined)?.length ?? 0);
 
     const aff = topicAffinity(user, article.topic) + (SOURCE_BOOST[x.source] ?? 0);
     const novelty = state.seen.has(article.title) ? -1.5 : 0;

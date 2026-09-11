@@ -39,7 +39,20 @@ export const defaultWeights: RewardWeights = {
   dwellCapMinutes: 20,
 };
 
+/** Positive terms must be non-negative (they are square-rooted); negatives must be non-positive. */
+export function validateWeights(w: RewardWeights): void {
+  const bad: string[] = [];
+  for (const k of ['open', 'completion', 'dwellPerMinute', 'save', 'share', 'follow', 'returned', 'dwellCapMinutes'] as const) {
+    if (!(w[k] >= 0)) bad.push(`${k} must be >= 0 (got ${w[k]})`);
+  }
+  for (const k of ['dismiss', 'scrollPast'] as const) {
+    if (!(w[k] <= 0)) bad.push(`${k} must be <= 0 (got ${w[k]})`);
+  }
+  if (bad.length) throw new Error(`invalid reward weights: ${bad.join('; ')}`);
+}
+
 export function sessionReward(rec: SessionRecord, w: RewardWeights = defaultWeights): number {
+  validateWeights(w);
   let opens = 0;
   let completion = 0;
   let dwellMs = 0;

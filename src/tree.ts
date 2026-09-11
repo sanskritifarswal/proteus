@@ -32,3 +32,18 @@ export interface UINode {
   /** Leaf only: developer-declared string key to render. */
   key?: string;
 }
+
+/** Every node path in a tree, using the same path rule as the sampler and renderer. */
+export function nodePaths(tree: UINode): Set<string> {
+  const out = new Set<string>();
+  const walk = (n: UINode, path: string) => {
+    out.add(path);
+    for (const [slot, v] of Object.entries(n.slots ?? {})) {
+      const base = path ? `${path}.${slot}` : slot;
+      if (Array.isArray(v)) v.forEach((c, i) => walk(c, `${base}[${i}]`));
+      else walk(v, base);
+    }
+  };
+  walk(tree, '');
+  return out;
+}

@@ -6,10 +6,11 @@
   "description": "Generative UI framework: typed component grammars, model-assembled layouts.",
   "scripts": {
     "schema": "node src/build-schema.ts && node src/export-grammar.ts",
-    "check": "node src/validate.ts && node src/check-sampler.ts",
+    "check": "node src/validate.ts && node src/check-sampler.ts && node src/check-sim.ts",
     "count": "node src/count-space.ts",
     "sample": "node src/sample-cli.ts",
-    "gallery": "node src/gallery.ts"
+    "gallery": "node src/gallery.ts",
+    "simulate": "node src/sim/run.ts"
   },
   "devDependencies": {
     "ajv": "^8.20.0"

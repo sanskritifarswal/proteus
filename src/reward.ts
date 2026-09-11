@@ -5,9 +5,11 @@ import type { SessionRecord } from './events.ts';
  *
  * The guardrail from the design notes: never optimise raw engagement alone.
  * So the largest weights sit on completion and on returning, dismissals are
- * a real negative, and the engagement terms saturate (sqrt of opens, capped
- * dwell) so that a screen which farms taps cannot outscore one that gets an
- * article actually read. Weights are a parameter: the local scorer can
+ * a real negative, and every positive volume term saturates (square root of
+ * opens, of total completion and of positive actions; capped dwell) so that
+ * a screen which farms taps, piles on content or puts a save button on
+ * everything cannot outscore one that fits the reader. Negatives stay
+ * linear: each dismissal counts in full. Weights are a parameter: the local scorer can
  * shift them per user or expose some to the user directly.
  */
 export interface RewardWeights {
@@ -37,12 +39,26 @@ export const defaultWeights: RewardWeights = {
   dwellCapMinutes: 20,
 };
 
+/** Positive terms must be non-negative (they are square-rooted); negatives must be non-positive. */
+export function validateWeights(w: RewardWeights): void {
+  const bad: string[] = [];
+  for (const k of ['open', 'completion', 'dwellPerMinute', 'save', 'share', 'follow', 'returned', 'dwellCapMinutes'] as const) {
+    if (!(w[k] >= 0)) bad.push(`${k} must be >= 0 (got ${w[k]})`);
+  }
+  for (const k of ['dismiss', 'scrollPast'] as const) {
+    if (!(w[k] <= 0)) bad.push(`${k} must be <= 0 (got ${w[k]})`);
+  }
+  if (bad.length) throw new Error(`invalid reward weights: ${bad.join('; ')}`);
+}
+
 export function sessionReward(rec: SessionRecord, w: RewardWeights = defaultWeights): number {
+  validateWeights(w);
   let opens = 0;
   let completion = 0;
   let dwellMs = 0;
   let scrollPast = 0;
-  let actions = 0;
+  let positiveActions = 0;
+  let negativeActions = 0;
   for (const e of rec.events) {
     switch (e.type) {
       case 'open': opens++; break;
@@ -50,19 +66,20 @@ export function sessionReward(rec: SessionRecord, w: RewardWeights = defaultWeig
       case 'dwell': dwellMs += e.value ?? 0; break;
       case 'scroll_past': scrollPast++; break;
       case 'action':
-        if (e.action === 'save') actions += w.save;
-        else if (e.action === 'share') actions += w.share;
-        else if (e.action === 'follow') actions += w.follow;
-        else if (e.action === 'dismiss') actions += w.dismiss;
+        if (e.action === 'save') positiveActions += w.save;
+        else if (e.action === 'share') positiveActions += w.share;
+        else if (e.action === 'follow') positiveActions += w.follow;
+        else if (e.action === 'dismiss') negativeActions += w.dismiss;
         break;
     }
   }
   const dwellMin = Math.min(dwellMs / 60000, w.dwellCapMinutes);
   return (
     w.open * Math.sqrt(opens) +
-    w.completion * completion +
+    w.completion * Math.sqrt(completion) +
     w.dwellPerMinute * dwellMin +
-    actions +
+    Math.sqrt(positiveActions) +
+    negativeActions +
     w.scrollPast * scrollPast +
     (rec.returned ? w.returned : 0)
   );

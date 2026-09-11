@@ -1,8 +1,9 @@
 import { makeRng } from './rng.ts';
 import { fakeData } from './fake-data.ts';
-import { nodePaths } from './tree.ts';
+import { nodePaths, type UIDocument, type UINode } from './tree.ts';
 import { makePopulation } from './sim/users.ts';
 import { fixedScreenPolicy, loadExample, randomScreenPolicy, runEpisodes } from './sim/episodes.ts';
+import { defaultWeights, sessionReward } from './reward.ts';
 
 /**
  * Simulator sanity checks: deterministic per seed, every event names a real
@@ -51,6 +52,58 @@ const report = (ok: boolean, msg: string) => { if (!ok) failures++; console.log(
   report(be > bd, `browsers prefer editorial-home (${be.toFixed(2)}) over dense-list (${bd.toFixed(2)})`);
 }
 
+// Volume must not pay by itself. Two forms of the claim:
+//  (a) a layout fitted to patient readers (dense and long) beats maximal
+//      random trees for them, so richness does not substitute for fit;
+//  (b) for impatient visual readers, raising every limit on their fitted
+//      layout to 10 does not raise their reward (quantity alone pays
+//      nothing), and separately, loading every card with a summary, two meta
+//      lines and two buttons lowers it (clutter costs something).
+// If any fails, the reward or the user model pays for sheer quantity,
+// which is the incentive the design guardrail forbids.
+function inflateLimits(doc: UIDocument): UIDocument {
+  const d = JSON.parse(JSON.stringify(doc)) as UIDocument;
+  for (const sec of d.tree.slots!.sections as UINode[]) (sec.slots!.content as UINode).props!.limit = '10';
+  return d;
+}
+function inflateCards(doc: UIDocument): UIDocument {
+  const d = JSON.parse(JSON.stringify(doc)) as UIDocument;
+  for (const sec of d.tree.slots!.sections as UINode[]) {
+    const coll = sec.slots!.content as UINode;
+    for (const key of ['lead', 'item'] as const) {
+      const card = coll.slots?.[key] as UINode | undefined;
+      if (!card) continue;
+      card.slots ??= {};
+      if (card.props!.variant !== 'compact') card.slots.summary = { type: 'Text', props: { role: 'body', maxLines: '2' }, bind: 'dek' };
+      card.slots.meta = [
+        { type: 'Text', props: { role: 'caption', maxLines: '1' }, bind: 'source' },
+        { type: 'Text', props: { role: 'label', maxLines: '1' }, bind: 'readTime' },
+      ];
+      card.slots.actions = [
+        { type: 'Button', props: { action: 'save', style: 'ghost' } },
+        { type: 'Button', props: { action: 'share', style: 'ghost' } },
+      ];
+    }
+  }
+  return d;
+}
+{
+  const N = 400;
+  const power = makePopulation(N, makeRng(31), 'power-reader');
+  const browsers = makePopulation(N, makeRng(32), 'browser');
+  const denseLong = loadExample('dense-list');
+  for (const sec of denseLong.tree.slots!.sections as UINode[]) (sec.slots!.content as UINode).props!.limit = '10';
+  const pd = runEpisodes(fixedScreenPolicy(denseLong), power, fakeData, 8, 13).stats.meanEpisodeReward;
+  const pm = runEpisodes(randomScreenPolicy('uniform'), power, fakeData, 8, 13).stats.meanEpisodeReward;
+  report(pd > pm, `fitted layout beats maximal random trees for power readers (dense-list x10 ${pd.toFixed(1)} vs maximal ${pm.toFixed(1)})`);
+  const grid = loadExample('visual-grid');
+  const bg = runEpisodes(fixedScreenPolicy(grid), browsers, fakeData, 8, 13).stats.meanEpisodeReward;
+  const bl = runEpisodes(fixedScreenPolicy(inflateLimits(grid)), browsers, fakeData, 8, 13).stats.meanEpisodeReward;
+  const bc = runEpisodes(fixedScreenPolicy(inflateCards(grid)), browsers, fakeData, 8, 13).stats.meanEpisodeReward;
+  report(bl <= bg * 1.02, `raising every limit to 10 does not raise reward for browsers (visual-grid ${bg.toFixed(1)} vs limits x10 ${bl.toFixed(1)})`);
+  report(bc < bg, `loading every card lowers reward for browsers (visual-grid ${bg.toFixed(1)} vs loaded cards ${bc.toFixed(1)})`);
+}
+
 // Availability matters: with no dismiss button anywhere, no dismiss events.
 {
   const { trajectories } = runEpisodes(fixedScreenPolicy(loadExample('editorial-home')), makePopulation(50, makeRng(3)), fakeData, 3, 4);
@@ -80,6 +133,13 @@ const report = (ok: boolean, msg: string) => { if (!ok) failures++; console.log(
     }
   }
   report(footerActions > 0 && unseen === 0, `footer actions only on footers the user reached (${footerActions} actions, ${unseen} unseen)`);
+}
+
+// Invalid reward weights are rejected instead of producing NaN.
+{
+  let threw = false;
+  try { sessionReward({ user: 'u', session: 0, grammar: 'g', tree: { type: 'Screen' }, events: [], returned: null }, { ...defaultWeights, save: -1 }); } catch { threw = true; }
+  report(threw, 'a negative positive-action weight is rejected');
 }
 
 // Empty population is rejected instead of producing NaN.

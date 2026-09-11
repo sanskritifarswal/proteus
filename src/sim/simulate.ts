@@ -1,6 +1,6 @@
 import type { UINode } from '../tree.ts';
 import type { UIEvent, UIEventInput, SessionRecord } from '../events.ts';
-import type { FeedData } from '../fake-data.ts';
+import type { Article, FeedData } from '../fake-data.ts';
 import type { Rng } from '../rng.ts';
 import type { SimUser } from './users.ts';
 
@@ -26,7 +26,22 @@ export interface SimState {
 const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
-const SOURCE_BOOST: Record<string, number> = { following: 0.4, saved: 0.6, continueReading: 0.5 };
+/**
+ * Feeds the user built themselves. They are filled with articles on topics
+ * the user likes (that is what following or saving means) and get a small
+ * boost on top for already being chosen. A flat boost on undifferentiated
+ * content would make any tree that merely covers these sections win.
+ */
+const PERSONAL_SOURCES = new Set(['following', 'saved', 'continueReading']);
+const SOURCE_BOOST: Record<string, number> = { following: 0.15, saved: 0.25, continueReading: 0.2 };
+
+function feedFor(user: SimUser, source: string, data: FeedData): Article[] {
+  const all = data.feeds[source].articles;
+  if (!PERSONAL_SOURCES.has(source)) return all;
+  const liked = all.filter((a) => (user.topics[a.topic] ?? 0) > 0.1);
+  const rest = all.filter((a) => (user.topics[a.topic] ?? 0) <= 0.1);
+  return [...liked, ...rest];
+}
 
 interface Exposure {
   path: string;
@@ -39,7 +54,7 @@ interface Exposure {
 }
 
 /** Everything the user could see, in the order they'd scroll past it. */
-function exposures(tree: UINode, data: FeedData): { list: Exposure[]; footers: Array<{ path: string; source: string; action: string; section: number }> } {
+function exposures(user: SimUser, tree: UINode, data: FeedData): { list: Exposure[]; footers: Array<{ path: string; source: string; action: string; section: number }> } {
   const list: Exposure[] = [];
   const footers: Array<{ path: string; source: string; action: string; section: number }> = [];
   const sections = (tree.slots?.sections as UINode[]) ?? [];
@@ -50,7 +65,7 @@ function exposures(tree: UINode, data: FeedData): { list: Exposure[]; footers: A
     const lead = coll.slots?.lead as UINode | undefined;
     const item = coll.slots!.item as UINode;
     const base = `sections[${si}].content`;
-    const n = Math.min(limit, data.feeds[source].articles.length);
+    const n = Math.min(limit, feedFor(user, source, data).length);
     for (let i = 0; i < n; i++) {
       const useLead = i === 0 && !!lead;
       list.push({
@@ -99,12 +114,14 @@ export function simulateSession(
   const densityFit = 1 + 0.35 * user.densityPref * density;
   const budget = user.patience * densityFit;
 
-  const { list, footers } = exposures(tree, data);
+  const { list, footers } = exposures(user, tree, data);
   let position = 0;
   let opens = 0;
   let completions = 0;
   let dismissals = 0;
   let scrolledPast = 0;
+  let impressions = 0;
+  let clutterSeen = 0;
   const openedThisSession = new Set<string>();
   const seenThisSession = new Set<string>();
   // Sections whose end the user scrolled to. A footer below content they
@@ -124,15 +141,24 @@ export function simulateSession(
       continue;
     }
     if (lastInSection) reachedEndOf.add(x.section);
-    const article = data.feeds[x.source].articles[x.articleIdx];
+    const article = feedFor(user, x.source, data)[x.articleIdx];
     const dup = seenThisSession.has(article.title);
     seenThisSession.add(article.title);
     t += 800 + rng.int(700);
     push({ type: 'impression', path: x.path, article: article.title });
+    impressions++;
+    // Buttons and a summary are full elements; a meta line is a small one.
+    clutterSeen += buttonActions(x.card).length + (x.card.slots?.summary ? 1 : 0) + 0.5 * ((x.card.slots?.meta as UINode[] | undefined)?.length ?? 0);
 
     const aff = topicAffinity(user, article.topic) + (SOURCE_BOOST[x.source] ?? 0);
     const novelty = state.seen.has(article.title) ? -1.5 : 0;
-    const logit = user.curiosity + 1.6 * aff + 0.7 * user.visualPref * visualScore(x.card) + 0.5 * infoScore(x.card) + novelty + (dup ? -2 : 0);
+    // Small tiles (grid cells, carousel items past the first two) get less attention each.
+    const tile = x.layout === 'grid' ? -0.3 : x.layout === 'carousel' && x.positionInSection >= 2 ? -0.3 : 0;
+    // Text on a card helps readers who want text; for visual readers it is
+    // clutter, and so is a row of buttons. Nothing on a card is free.
+    const textWeight = 0.5 * (0.5 - 0.5 * user.visualPref);
+    const clutter = 0.12 * buttonActions(x.card).length * (0.5 + 0.5 * user.visualPref);
+    const logit = user.curiosity + 1.6 * aff + 0.7 * user.visualPref * visualScore(x.card) + textWeight * infoScore(x.card) - clutter + novelty + tile + (dup ? -2 : 0);
     if (rng.next() < sigmoid(logit) && !openedThisSession.has(article.title)) {
       openedThisSession.add(article.title);
       opens++;
@@ -173,8 +199,14 @@ export function simulateSession(
 
   // Satisfaction drives retention. Dismissals hurt more than opens help; a
   // long scroll with nothing worth opening is a bad session.
-  const satisfaction = 1.2 * completions + 0.4 * opens - 1.0 * dismissals - 0.06 * scrolledPast + 0.5 * (densityFit - 1) - 0.8;
-  const returnP = clamp(user.returnBase + 0.18 * Math.tanh(satisfaction), 0.03, 0.98);
+  // Opened-and-abandoned reads feel like bait; they cost satisfaction rather
+  // than add to it. Busy cards tire visual readers: the average clutter of
+  // what they saw lowers satisfaction in proportion to their visual preference.
+  const shallow = opens - completions;
+  const meanClutter = impressions ? clutterSeen / impressions : 0;
+  const clutterCost = 0.25 * meanClutter * (0.5 + 0.5 * user.visualPref);
+  const satisfaction = 1.2 * completions - 0.25 * shallow - 1.0 * dismissals - 0.15 * scrolledPast - clutterCost + 0.6 * (densityFit - 1) - 0.6;
+  const returnP = clamp(user.returnBase + 0.3 * Math.tanh(satisfaction), 0.03, 0.98);
   const returned = rng.next() < returnP;
 
   for (const title of openedThisSession) state.seen.add(title);

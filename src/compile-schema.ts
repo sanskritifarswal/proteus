@@ -4,6 +4,9 @@ type J = Record<string, unknown>;
 
 /** Stable identifier a document uses to name the grammar it was derived from. */
 export function grammarId(g: Grammar): string {
+  if (g.name.includes('@') || g.version.includes('@')) {
+    throw new Error(`grammar name and version must not contain '@' (got '${g.name}', '${g.version}')`);
+  }
   return `${g.name}@${g.version}`;
 }
 

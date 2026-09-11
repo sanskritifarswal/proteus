@@ -8,7 +8,8 @@
     "schema": "node src/build-schema.ts && node src/export-grammar.ts",
     "check": "node src/validate.ts && node src/check-sampler.ts",
     "count": "node src/count-space.ts",
-    "sample": "node src/sample-cli.ts"
+    "sample": "node src/sample-cli.ts",
+    "gallery": "node src/gallery.ts"
   },
   "devDependencies": {
     "ajv": "^8.20.0"

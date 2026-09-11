@@ -1,26 +1,43 @@
 {
-  "type": "Screen",
-  "slots": {
-    "sections": [
-      {
-        "type": "Section",
-        "props": { "source": "forYou" },
-        "slots": {
-          "content": {
-            "type": "Collection",
-            "props": { "layout": "stack", "limit": "5" },
-            "slots": {
-              "item": {
-                "type": "Card",
-                "props": { "variant": "compact" },
-                "slots": {
-                  "title": { "type": "Text", "props": { "role": "title", "maxLines": "2" }, "key": "section.forYou" }
+  "grammar": "newsfeed@0.1.0",
+  "tree": {
+    "type": "Screen",
+    "slots": {
+      "sections": [
+        {
+          "type": "Section",
+          "props": {
+            "source": "forYou"
+          },
+          "slots": {
+            "content": {
+              "type": "Collection",
+              "props": {
+                "layout": "stack",
+                "limit": "5"
+              },
+              "slots": {
+                "item": {
+                  "type": "Card",
+                  "props": {
+                    "variant": "compact"
+                  },
+                  "slots": {
+                    "title": {
+                      "type": "Text",
+                      "props": {
+                        "role": "title",
+                        "maxLines": "2"
+                      },
+                      "key": "section.forYou"
+                    }
+                  }
                 }
               }
             }
           }
         }
-      }
-    ]
+      ]
+    }
   }
 }

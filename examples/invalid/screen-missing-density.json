@@ -2,155 +2,15 @@
   "grammar": "newsfeed@0.2.0",
   "tree": {
     "type": "Screen",
+    "props": {},
     "slots": {
       "sections": [
         {
           "type": "Section",
           "props": {
-            "source": "continueReading"
+            "source": "topStories"
           },
           "slots": {
-            "heading": {
-              "type": "Text",
-              "props": {
-                "role": "label",
-                "maxLines": "1"
-              },
-              "key": "section.continueReading"
-            },
-            "content": {
-              "type": "Collection",
-              "props": {
-                "layout": "stack",
-                "limit": "3"
-              },
-              "slots": {
-                "item": {
-                  "type": "Card",
-                  "props": {
-                    "variant": "compact"
-                  },
-                  "slots": {
-                    "title": {
-                      "type": "Text",
-                      "props": {
-                        "role": "title",
-                        "maxLines": "1"
-                      },
-                      "bind": "title"
-                    },
-                    "meta": [
-                      {
-                        "type": "Text",
-                        "props": {
-                          "role": "caption",
-                          "maxLines": "1"
-                        },
-                        "bind": "readTime"
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          "type": "Section",
-          "props": {
-            "source": "forYou"
-          },
-          "slots": {
-            "heading": {
-              "type": "Text",
-              "props": {
-                "role": "label",
-                "maxLines": "1"
-              },
-              "key": "section.forYou"
-            },
-            "content": {
-              "type": "Collection",
-              "props": {
-                "layout": "stack",
-                "limit": "10"
-              },
-              "slots": {
-                "item": {
-                  "type": "Card",
-                  "props": {
-                    "variant": "compact"
-                  },
-                  "slots": {
-                    "media": {
-                      "type": "Image",
-                      "props": {
-                        "aspect": "1:1"
-                      },
-                      "bind": "imageUrl"
-                    },
-                    "title": {
-                      "type": "Text",
-                      "props": {
-                        "role": "title",
-                        "maxLines": "2"
-                      },
-                      "bind": "title"
-                    },
-                    "meta": [
-                      {
-                        "type": "Text",
-                        "props": {
-                          "role": "caption",
-                          "maxLines": "1"
-                        },
-                        "bind": "source"
-                      },
-                      {
-                        "type": "Text",
-                        "props": {
-                          "role": "label",
-                          "maxLines": "1"
-                        },
-                        "bind": "readTime"
-                      }
-                    ],
-                    "actions": [
-                      {
-                        "type": "Button",
-                        "props": {
-                          "action": "save",
-                          "style": "ghost"
-                        }
-                      }
-                    ]
-                  }
-                }
-              }
-            },
-            "footer": {
-              "type": "Button",
-              "props": {
-                "action": "seeMore",
-                "style": "ghost"
-              }
-            }
-          }
-        },
-        {
-          "type": "Section",
-          "props": {
-            "source": "following"
-          },
-          "slots": {
-            "heading": {
-              "type": "Text",
-              "props": {
-                "role": "label",
-                "maxLines": "1"
-              },
-              "key": "section.following"
-            },
             "content": {
               "type": "Collection",
               "props": {
@@ -171,26 +31,7 @@
                         "maxLines": "2"
                       },
                       "bind": "title"
-                    },
-                    "meta": [
-                      {
-                        "type": "Text",
-                        "props": {
-                          "role": "caption",
-                          "maxLines": "1"
-                        },
-                        "bind": "source"
-                      }
-                    ],
-                    "actions": [
-                      {
-                        "type": "Button",
-                        "props": {
-                          "action": "dismiss",
-                          "style": "ghost"
-                        }
-                      }
-                    ]
+                    }
                   }
                 }
               }

@@ -11,7 +11,9 @@ import type { Grammar } from '../grammar-types.ts';
  *
  * What the model chooses: structure and presentation.
  * What it never chooses: content (bound from data), ranking (the feed
- * order is data), or theme (colours/spacing live in the renderer).
+ * order is data), or theme. The one theme-adjacent choice is Screen.density,
+ * a single screen-wide scale; colours, type and spacing tokens themselves
+ * live in the renderer.
  */
 export const newsfeed = {
   name: 'newsfeed',

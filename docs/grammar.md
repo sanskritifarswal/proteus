@@ -27,7 +27,9 @@ Rules that keep the derivation space finite and meaningful:
 4. **Cross-node constraints are declarative** (`when variant=hero, requireSlot media`) so they compile
    to JSON Schema and are honoured by the derivation counter.
 5. **Content, ranking and theme are out of scope.** Feeds arrive already ranked; the grammar chooses
-   presentation of ranked data. Colours and spacing are the renderer's.
+   presentation of ranked data. Colours, type and spacing tokens are the renderer's. The one exception
+   is `Screen.density`, a single screen-wide scale the renderer maps onto its own spacing tokens; no
+   other theme value is a grammar choice.
 
 ## 2. App choice: a reading / news feed home screen
 
@@ -148,7 +150,7 @@ Each file breaks exactly one rule; the validator reports the offending path and 
 | `card-inside-card` | slot type acceptance (no recursion) |
 | `too-many-sections` | cardinality |
 | `screen-missing-density` | all declared props are required |
-| `wrong-grammar-version` | envelope pins the grammar id (a 0.1.0 tree, which predates `density`) |
+| `wrong-grammar-version` | envelope pins the grammar id (a 0.2.0-shaped tree labelled `newsfeed@0.1.0`; rejected on the id alone) |
 | `missing-envelope` | bare tree without envelope |
 
 ### 6.3 Size of the derivation space (`npm run count`)

@@ -15,8 +15,12 @@ Read [docs/grammar.md](docs/grammar.md) for the design.
 | `src/tree.ts` | Grammar-agnostic UI document (grammar id + tree) and node types |
 | `src/compile-schema.ts` | Grammar → JSON Schema compiler (also type-checks the grammar) |
 | `src/validate.ts` | Validates `examples/valid` (must pass) and `examples/invalid` (must fail) |
-| `src/count-space.ts` | Exact count of derivations the grammar admits |
-| `schema/newsfeed.schema.json` | Generated; do not edit |
+| `src/count.ts` | Derivation-space arithmetic shared by the counter and the sampler |
+| `src/count-space.ts` | Prints exact derivation counts |
+| `src/sample.ts` | Derivation sampler: a policy walks the grammar one decision at a time (see [docs/sampler.md](docs/sampler.md)) |
+| `src/sample-cli.ts`, `src/check-sampler.ts` | Sampler CLI and its checks |
+| `src/export-grammar.ts` | Dumps the grammar spec as JSON for non-TypeScript consumers |
+| `schema/newsfeed.schema.json`, `schema/newsfeed.grammar.json` | Generated; do not edit |
 | `examples/` | Example UI trees |
 
 ## Commands
@@ -25,6 +29,8 @@ Node 24+ (runs TypeScript directly, no build step).
 
 ```bash
 npm install
-npm run check    # regenerate schema, validate all examples
+npm run check    # regenerate schema, validate all examples, check the sampler
+npm run schema   # regenerate schema + grammar JSON export
 npm run count    # derivation-space sizes
+npm run sample -- --seed 1 --n 3 --policy local   # print sampled UI documents
 ```

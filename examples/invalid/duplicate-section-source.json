@@ -2,7 +2,9 @@
   "grammar": "newsfeed@0.3.0",
   "tree": {
     "type": "Screen",
-    "props": {},
+    "props": {
+      "density": "comfortable"
+    },
     "slots": {
       "sections": [
         {
@@ -22,6 +24,39 @@
                   "type": "Card",
                   "props": {
                     "variant": "compact"
+                  },
+                  "slots": {
+                    "title": {
+                      "type": "Text",
+                      "props": {
+                        "role": "title",
+                        "maxLines": "2"
+                      },
+                      "bind": "title"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "Section",
+          "props": {
+            "source": "topStories"
+          },
+          "slots": {
+            "content": {
+              "type": "Collection",
+              "props": {
+                "layout": "carousel",
+                "limit": "5"
+              },
+              "slots": {
+                "item": {
+                  "type": "Card",
+                  "props": {
+                    "variant": "standard"
                   },
                   "slots": {
                     "title": {

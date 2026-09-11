@@ -1,5 +1,5 @@
 {
-  "grammar": "newsfeed@0.2.0",
+  "grammar": "newsfeed@0.3.0",
   "tree": {
     "type": "Screen",
     "props": {
@@ -19,7 +19,7 @@
                 "role": "label",
                 "maxLines": "1"
               },
-              "key": "section.continueReading"
+              "bind": "name"
             },
             "content": {
               "type": "Collection",
@@ -70,7 +70,7 @@
                 "role": "label",
                 "maxLines": "1"
               },
-              "key": "section.forYou"
+              "bind": "name"
             },
             "content": {
               "type": "Collection",
@@ -152,7 +152,7 @@
                 "role": "label",
                 "maxLines": "1"
               },
-              "key": "section.following"
+              "bind": "name"
             },
             "content": {
               "type": "Collection",

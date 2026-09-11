@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "newsfeed@0.2.0 UI document",
+  "title": "newsfeed@0.3.0 UI document",
   "description": "Generated from the 'newsfeed' grammar. Root: Screen in context 'screen'.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "grammar": {
-      "const": "newsfeed@0.2.0",
+      "const": "newsfeed@0.3.0",
       "description": "Grammar this tree was derived from."
     },
     "tree": {
@@ -55,7 +55,3010 @@
                 "$ref": "#/$defs/Section@screen"
               },
               "minItems": 1,
-              "maxItems": 5
+              "maxItems": 5,
+              "uniqueItems": true,
+              "allOf": [
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 3,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "topStories"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "forYou"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "following"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "continueReading"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 4,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 5,
+                        "prefixItems": [
+                          {},
+                          {},
+                          {},
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "const": "saved"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
             }
           },
           "required": [
@@ -149,6 +3152,7 @@
           "additionalProperties": false,
           "properties": {
             "heading": {
+              "description": "Always the feed name, so a heading can never disagree with its source.",
               "allOf": [
                 {
                   "$ref": "#/$defs/Text@feed"
@@ -164,10 +3168,23 @@
                             "title",
                             "label"
                           ]
+                        },
+                        "maxLines": {
+                          "enum": [
+                            "1"
+                          ]
                         }
                       }
+                    },
+                    "bind": {
+                      "enum": [
+                        "name"
+                      ]
                     }
-                  }
+                  },
+                  "required": [
+                    "bind"
+                  ]
                 }
               ]
             },
@@ -231,12 +3248,7 @@
         "key": {
           "enum": [
             "header.home",
-            "header.forYou",
-            "section.topStories",
-            "section.forYou",
-            "section.following",
-            "section.continueReading",
-            "section.saved"
+            "header.forYou"
           ]
         }
       },
@@ -411,12 +3423,7 @@
         "key": {
           "enum": [
             "header.home",
-            "header.forYou",
-            "section.topStories",
-            "section.forYou",
-            "section.following",
-            "section.continueReading",
-            "section.saved"
+            "header.forYou"
           ]
         }
       },
@@ -871,7 +3878,214 @@
               },
               "minItems": 0,
               "maxItems": 2,
-              "uniqueItems": true
+              "uniqueItems": true,
+              "allOf": [
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "bind": {
+                                "const": "source"
+                              }
+                            },
+                            "required": [
+                              "bind"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "bind": {
+                                "const": "source"
+                              }
+                            },
+                            "required": [
+                              "bind"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "bind": {
+                                "const": "author"
+                              }
+                            },
+                            "required": [
+                              "bind"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "bind": {
+                                "const": "author"
+                              }
+                            },
+                            "required": [
+                              "bind"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "bind": {
+                                "const": "publishedAt"
+                              }
+                            },
+                            "required": [
+                              "bind"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "bind": {
+                                "const": "publishedAt"
+                              }
+                            },
+                            "required": [
+                              "bind"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "bind": {
+                                "const": "readTime"
+                              }
+                            },
+                            "required": [
+                              "bind"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "bind": {
+                                "const": "readTime"
+                              }
+                            },
+                            "required": [
+                              "bind"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "bind": {
+                                "const": "topic"
+                              }
+                            },
+                            "required": [
+                              "bind"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "bind": {
+                                "const": "topic"
+                              }
+                            },
+                            "required": [
+                              "bind"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
             },
             "summary": {
               "allOf": [
@@ -910,7 +4124,294 @@
               },
               "minItems": 0,
               "maxItems": 2,
-              "uniqueItems": true
+              "uniqueItems": true,
+              "allOf": [
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "const": "read"
+                                  }
+                                },
+                                "required": [
+                                  "action"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "const": "read"
+                                  }
+                                },
+                                "required": [
+                                  "action"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "const": "save"
+                                  }
+                                },
+                                "required": [
+                                  "action"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "const": "save"
+                                  }
+                                },
+                                "required": [
+                                  "action"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "const": "share"
+                                  }
+                                },
+                                "required": [
+                                  "action"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "const": "share"
+                                  }
+                                },
+                                "required": [
+                                  "action"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "const": "follow"
+                                  }
+                                },
+                                "required": [
+                                  "action"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "const": "follow"
+                                  }
+                                },
+                                "required": [
+                                  "action"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "prefixItems": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "const": "dismiss"
+                                  }
+                                },
+                                "required": [
+                                  "action"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 2,
+                        "prefixItems": [
+                          {},
+                          {
+                            "type": "object",
+                            "properties": {
+                              "props": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "const": "dismiss"
+                                  }
+                                },
+                                "required": [
+                                  "action"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "props"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
             }
           },
           "required": [
@@ -957,6 +4458,53 @@
             "required": [
               "slots"
             ]
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "props": {
+                "type": "object",
+                "properties": {
+                  "variant": {
+                    "const": "hero"
+                  }
+                },
+                "required": [
+                  "variant"
+                ]
+              }
+            },
+            "required": [
+              "props"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "slots": {
+                "type": "object",
+                "properties": {
+                  "media": {
+                    "type": "object",
+                    "properties": {
+                      "props": {
+                        "type": "object",
+                        "properties": {
+                          "aspect": {
+                            "enum": [
+                              "16:9",
+                              "4:3"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         {
@@ -1125,12 +4673,7 @@
         "key": {
           "enum": [
             "header.home",
-            "header.forYou",
-            "section.topStories",
-            "section.forYou",
-            "section.following",
-            "section.continueReading",
-            "section.saved"
+            "header.forYou"
           ]
         }
       },

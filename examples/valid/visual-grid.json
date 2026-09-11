@@ -1,5 +1,5 @@
 {
-  "grammar": "newsfeed@0.2.0",
+  "grammar": "newsfeed@0.3.0",
   "tree": {
     "type": "Screen",
     "props": {
@@ -137,7 +137,7 @@
                 "role": "title",
                 "maxLines": "1"
               },
-              "key": "section.saved"
+              "bind": "name"
             },
             "content": {
               "type": "Collection",

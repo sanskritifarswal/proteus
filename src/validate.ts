@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import Ajv2020 from 'ajv/dist/2020.js';
-import { compileSchema } from './compile-schema.ts';
+import { compileSchema, grammarId } from './compile-schema.ts';
 import { newsfeed } from './grammars/newsfeed.ts';
 
 /**
@@ -10,7 +10,7 @@ import { newsfeed } from './grammars/newsfeed.ts';
 const schema = compileSchema(newsfeed);
 writeFileSync(`schema/${newsfeed.name}.schema.json`, JSON.stringify(schema, null, 2) + '\n');
 
-const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false });
+const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false, strictTuples: false });
 const validate = ajv.compile(schema);
 
 let failures = 0;
@@ -18,6 +18,14 @@ let failures = 0;
 function check(dir: string, expectValid: boolean) {
   for (const f of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
     const tree = JSON.parse(readFileSync(`${dir}/${f}`, 'utf8'));
+    // Every fixture except the two envelope negatives must carry the current
+    // grammar id, so a missed bump fails loudly instead of masking the rule
+    // the fixture exists to test.
+    if (!['missing-envelope.json', 'wrong-grammar-version.json'].includes(f) && tree.grammar !== grammarId(newsfeed)) {
+      failures++;
+      console.log(`FAIL  ${dir}/${f}  envelope is '${tree.grammar}', expected '${grammarId(newsfeed)}'`);
+      continue;
+    }
     const ok = validate(tree);
     const pass = ok === expectValid;
     if (!pass) failures++;

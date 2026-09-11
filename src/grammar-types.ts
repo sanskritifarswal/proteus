@@ -57,6 +57,13 @@ export interface SlotDef {
   childBind?: readonly string[];
   /** Array slots only: forbid two identical children. */
   distinct?: boolean;
+  /**
+   * Array slots only: children must differ in this field. Either a prop name
+   * of the child component or the literal 'bind'. Stronger than `distinct`,
+   * which compares whole nodes and so allows two "Save" buttons in
+   * different styles or two meta lines bound to the same field.
+   */
+  distinctBy?: string;
 }
 
 export interface ContentDef {

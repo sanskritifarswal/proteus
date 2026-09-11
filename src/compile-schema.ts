@@ -106,7 +106,12 @@ function compileComponent(
       const item = alts.length === 1 ? alts[0] : { anyOf: alts };
       sprops[sname] = sdef.max === 1
         ? { ...(sdef.description ? { description: sdef.description } : {}), ...item }
-        : { ...(sdef.description ? { description: sdef.description } : {}), type: 'array', items: item, minItems: sdef.min, maxItems: sdef.max, ...(sdef.distinct ? { uniqueItems: true } : {}) };
+        : {
+            ...(sdef.description ? { description: sdef.description } : {}),
+            type: 'array', items: item, minItems: sdef.min, maxItems: sdef.max,
+            ...(sdef.distinct || sdef.distinctBy ? { uniqueItems: true } : {}),
+            ...(sdef.distinctBy ? { allOf: distinctByClauses(g, name, sname, sdef, cctx) } : {}),
+          };
       if (sdef.min >= 1) sreq.push(sname);
     }
     properties.slots = { type: 'object', additionalProperties: false, properties: sprops, ...(sreq.length ? { required: sreq } : {}) };
@@ -162,6 +167,50 @@ function childRef(g: Grammar, parent: string, slot: string, child: string, cctx:
     narrow.properties = { ...((narrow.properties as J) ?? {}), bind: { enum: [...sdef.childBind] } };
   }
   return Object.keys(narrow).length ? { allOf: [ref, narrow] } : ref;
+}
+
+/** Values the distinctBy field can take across the slot's accepted child types. */
+export function distinctByValues(g: Grammar, parent: string, slot: string, sdef: SlotDef, cctx: string): string[] {
+  const field = sdef.distinctBy!;
+  const values = new Set<string>();
+  for (const child of sdef.accepts) {
+    const comp = g.components[child];
+    if (field === 'bind') {
+      const fields = g.contexts[cctx].fields;
+      for (const [f, kind] of Object.entries(fields)) {
+        if (comp.content?.bind?.includes(kind) && (!sdef.childBind || sdef.childBind.includes(f))) values.add(f);
+      }
+    } else {
+      const def = comp.props?.[field];
+      if (!def) throw new Error(`${parent}.${slot}: distinctBy names unknown prop '${field}' on ${child}`);
+      for (const v of def.values ?? def.valuesByContext?.[cctx] ?? []) {
+        if (!sdef.childProps?.[field] || sdef.childProps[field].includes(v)) values.add(v);
+      }
+    }
+  }
+  if (values.size === 0) throw new Error(`${parent}.${slot}: distinctBy '${field}' has no possible values`);
+  return [...values];
+}
+
+/**
+ * "No two children share a value of the field": for every pair of positions
+ * (i, j) and every value v, forbid both positions holding v. Array slots are
+ * small, so the clause count stays manageable.
+ */
+function distinctByClauses(g: Grammar, parent: string, slot: string, sdef: SlotDef, cctx: string): J[] {
+  const field = sdef.distinctBy!;
+  const values = distinctByValues(g, parent, slot, sdef, cctx);
+  const selector = (v: string): J => field === 'bind'
+    ? { type: 'object', properties: { bind: { const: v } }, required: ['bind'] }
+    : { type: 'object', properties: { props: { type: 'object', properties: { [field]: { const: v } }, required: [field] } }, required: ['props'] };
+  const at = (i: number, v: string): J => ({ type: 'array', minItems: i + 1, prefixItems: [...Array.from({ length: i }, () => ({})), selector(v)] });
+  const clauses: J[] = [];
+  for (let i = 0; i < sdef.max; i++) {
+    for (let j = i + 1; j < sdef.max; j++) {
+      for (const v of values) clauses.push({ not: { allOf: [at(i, v), at(j, v)] } });
+    }
+  }
+  return clauses;
 }
 
 function checkPropValues(g: Grammar, comp: ComponentDef | undefined, name: string, ctx: string, p: string, vals: readonly string[], where: string) {

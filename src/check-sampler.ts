@@ -10,7 +10,7 @@ import type { Grammar } from './grammar-types.ts';
  * compiled schema under both policies, and sampling must be deterministic
  * for a given seed.
  */
-const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false });
+const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false, strictTuples: false });
 const validate = ajv.compile(compileSchema(newsfeed));
 const N = 200;
 let failures = 0;

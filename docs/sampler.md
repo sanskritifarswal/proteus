@@ -46,7 +46,9 @@ factored per decision rather than treating derivations as arms.
 
 ## Known limits
 
-- For `distinct` slots a duplicate draw is discarded. A stochastic policy
+- For `distinctBy` slots the values already used are removed from later
+  draws, so children differ by construction and any policy fills the slot.
+- For plain `distinct` slots a duplicate draw is discarded. A stochastic policy
   gets up to 2n draws to fill n positions; a deterministic policy cannot
   produce two distinct children, so the slot is truncated to what was drawn.
   The tree stays valid because every distinct slot in the grammar has min 0.
@@ -55,10 +57,10 @@ factored per decision rather than treating derivations as arms.
 - The `props` decision is a joint choice per node. A finer factoring (one
   decision per prop) would need `propIn` constraints applied incrementally.
 
-## First findings from sampling (seed 3, local policy)
+## First findings from sampling (seed 3, local policy, grammar 0.2.0)
 
-Looseness the hand-written examples never exposed. Each is a candidate
-constraint for the next grammar version:
+Looseness the hand-written examples never exposed. All four became
+constraints in grammar 0.3.0; see docs/gallery.md for the full list.
 
 - A section's heading key can disagree with its source (`source=forYou`
   headed by `section.topStories`). Heading keys should be tied to the

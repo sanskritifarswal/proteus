@@ -17,7 +17,7 @@ import type { Grammar } from '../grammar-types.ts';
  */
 export const newsfeed = {
   name: 'newsfeed',
-  version: '0.2.0',
+  version: '0.3.0',
   root: 'Screen',
   rootContext: 'screen',
 
@@ -48,11 +48,6 @@ export const newsfeed = {
   strings: [
     'header.home',
     'header.forYou',
-    'section.topStories',
-    'section.forYou',
-    'section.following',
-    'section.continueReading',
-    'section.saved',
   ],
 
   components: {
@@ -67,7 +62,7 @@ export const newsfeed = {
       },
       slots: {
         header: { accepts: ['Header'], min: 0, max: 1 },
-        sections: { accepts: ['Section'], min: 1, max: 5 },
+        sections: { accepts: ['Section'], min: 1, max: 5, distinctBy: 'source' },
       },
     },
 
@@ -90,7 +85,11 @@ export const newsfeed = {
         },
       },
       slots: {
-        heading: { accepts: ['Text'], min: 0, max: 1, context: 'feed', childProps: { role: ['title', 'label'] } },
+        heading: {
+          description: 'Always the feed name, so a heading can never disagree with its source.',
+          accepts: ['Text'], min: 0, max: 1, context: 'feed',
+          childProps: { role: ['title', 'label'], maxLines: ['1'] }, childContent: 'bind', childBind: ['name'],
+        },
         content: { accepts: ['Collection'], min: 1, max: 1, context: 'feed' },
         footer: { accepts: ['Button'], min: 0, max: 1, context: 'feed' },
       },
@@ -131,15 +130,16 @@ export const newsfeed = {
         media: { accepts: ['Image'], min: 0, max: 1 },
         title: { accepts: ['Text'], min: 1, max: 1, childProps: { role: ['title'] }, childContent: 'bind', childBind: ['title'] },
         meta: {
-          accepts: ['Text'], min: 0, max: 2, distinct: true,
+          accepts: ['Text'], min: 0, max: 2, distinctBy: 'bind',
           childProps: { role: ['caption', 'label'] }, childContent: 'bind',
           childBind: ['source', 'author', 'publishedAt', 'readTime', 'topic'],
         },
         summary: { accepts: ['Text'], min: 0, max: 1, childProps: { role: ['body'] }, childContent: 'bind', childBind: ['dek'] },
-        actions: { accepts: ['Button'], min: 0, max: 2, distinct: true },
+        actions: { accepts: ['Button'], min: 0, max: 2, distinctBy: 'action' },
       },
       constraints: [
         { when: { prop: 'variant', is: 'hero' }, requireSlot: 'media' },
+        { when: { prop: 'variant', is: 'hero' }, childProps: { slot: 'media', prop: 'aspect', in: ['16:9', '4:3'] } },
         { when: { prop: 'variant', is: 'compact' }, forbidSlot: 'summary' },
         { when: { prop: 'variant', is: 'compact' }, childProps: { slot: 'media', prop: 'aspect', in: ['1:1'] } },
       ],

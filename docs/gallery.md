@@ -45,3 +45,12 @@ counter.
 Things that looked odd but are taste, not grammar: a *Read* button on every
 compact row when tapping already opens the article; the date as a header
 title. Left alone.
+
+## After grammar 0.3.0 (same seed, same 20 samples)
+
+All six findings are gone: headings always name their feed, no screen
+repeats a source, meta lines differ by field, hero images are wide, headings
+are one line, action buttons differ by action. The same twenty seeds now
+produce screens whose remaining oddities are content and taste, not grammar.
+Next candidates to watch: a *Read* button on every compact row, and `label`
+role headings next to `title` role headings on the same screen.

@@ -4,7 +4,7 @@ Generative UI framework. Developers define UI components at compile time as a ty
 (components, slots, valid slot types); at runtime a model assembles a personalised UI from that
 grammar. Currently at step one: getting the grammar right.
 
-Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/sampler.md) for the decision interface, and [docs/gallery.md](docs/gallery.md) for the look-and-fix loop.
+Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/sampler.md) for the decision interface, [docs/gallery.md](docs/gallery.md) for the look-and-fix loop, and [docs/simulator.md](docs/simulator.md) for events, reward and synthetic users.
 
 ## Layout
 
@@ -22,18 +22,22 @@ Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/s
 | `src/export-grammar.ts` | Dumps the grammar spec as JSON for non-TypeScript consumers |
 | `src/render-html.ts`, `src/fake-data.ts` | Plain HTML renderer for newsfeed trees plus fake content; elements carry `data-path` |
 | `src/gallery.ts` | Samples N trees and renders them to one page (`gallery/index.html`, not committed) |
+| `src/events.ts`, `src/reward.ts` | Event format shared by simulator and real instrumentation; composite per-session reward |
+| `src/sim/` | Synthetic readers, one-session simulation, episode runner, baseline comparison CLI |
+| `src/check-sim.ts` | Simulator checks (determinism, path validity, preferences move reward) |
 | `schema/newsfeed.schema.json`, `schema/newsfeed.grammar.json` | Generated; do not edit |
 | `examples/` | Example UI trees |
 
 ## Commands
 
-Node 24+ (runs TypeScript directly, no build step).
+Node 24+ (runs TypeScript directly, no build step; `tsc` is used only to type-check).
 
 ```bash
 npm install
-npm run check    # regenerate schema, validate all examples, check the sampler
+npm run check    # type-check, regenerate schema, validate examples, check sampler and simulator
 npm run schema   # regenerate schema + grammar JSON export
 npm run count    # derivation-space sizes
 npm run sample -- --seed 1 --n 3 --policy local   # print sampled UI documents
 npm run gallery -- --seed 1 --n 20               # render 20 samples to gallery/index.html
+npm run simulate -- --users 300 --sessions 10    # compare baseline policies on synthetic users; trajectories to out/
 ```

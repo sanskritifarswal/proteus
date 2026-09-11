@@ -120,6 +120,8 @@ export function simulateSession(
   let completions = 0;
   let dismissals = 0;
   let scrolledPast = 0;
+  let impressions = 0;
+  let clutterSeen = 0;
   const openedThisSession = new Set<string>();
   const seenThisSession = new Set<string>();
   // Sections whose end the user scrolled to. A footer below content they
@@ -144,6 +146,8 @@ export function simulateSession(
     seenThisSession.add(article.title);
     t += 800 + rng.int(700);
     push({ type: 'impression', path: x.path, article: article.title });
+    impressions++;
+    clutterSeen += buttonActions(x.card).length + (x.card.slots?.summary ? 1 : 0);
 
     const aff = topicAffinity(user, article.topic) + (SOURCE_BOOST[x.source] ?? 0);
     const novelty = state.seen.has(article.title) ? -1.5 : 0;
@@ -194,9 +198,13 @@ export function simulateSession(
 
   // Satisfaction drives retention. Dismissals hurt more than opens help; a
   // long scroll with nothing worth opening is a bad session.
-  // Opened-and-abandoned reads feel like bait; they cost satisfaction rather than add to it.
+  // Opened-and-abandoned reads feel like bait; they cost satisfaction rather
+  // than add to it. Busy cards tire visual readers: the average clutter of
+  // what they saw lowers satisfaction in proportion to their visual preference.
   const shallow = opens - completions;
-  const satisfaction = 1.2 * completions - 0.25 * shallow - 1.0 * dismissals - 0.15 * scrolledPast + 0.6 * (densityFit - 1) - 0.6;
+  const meanClutter = impressions ? clutterSeen / impressions : 0;
+  const clutterCost = 0.25 * meanClutter * (0.5 + 0.5 * user.visualPref);
+  const satisfaction = 1.2 * completions - 0.25 * shallow - 1.0 * dismissals - 0.15 * scrolledPast - clutterCost + 0.6 * (densityFit - 1) - 0.6;
   const returnP = clamp(user.returnBase + 0.3 * Math.tanh(satisfaction), 0.03, 0.98);
   const returned = rng.next() < returnP;
 

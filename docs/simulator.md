@@ -48,9 +48,11 @@ enforced by `tsc`.
 ## Reward (`src/reward.ts`)
 
 Weighted sum with the largest weights on completion and return, dismissal
-as a real negative, and saturating volume terms (square root of opens and
-of total completion, capped dwell). Weights are a parameter: the local
-scorer can shift them per user or expose some to the user.
+as a real negative, and every positive volume term saturating (square root
+of opens, of total completion and of positive actions; capped dwell), so a
+save button on everything cannot farm reward any more than a tap can.
+Negatives stay linear. Weights are a parameter: the local scorer can shift
+them per user or expose some to the user.
 
 ## Synthetic readers (`src/sim/users.ts`)
 
@@ -78,7 +80,7 @@ sections won.
 
 Session satisfaction sets the return probability. Completed reads raise
 it; opened-and-abandoned reads lower it (they feel like bait), as do
-dismissals and long low-yield scrolling.
+dismissals, long low-yield scrolling, and, for visual readers, busy cards.
 
 ## Checks (`npm run check` runs `src/check-sim.ts`)
 
@@ -91,11 +93,14 @@ dismissals and long low-yield scrolling.
   browsers the reverse. A simulator that fails this cannot tell policies
   apart and is not worth training against.
 - A tree with no dismiss buttons produces no dismiss events.
-- Volume does not pay by itself, in two forms. A layout fitted to patient
-  readers (dense and long) beats maximal random trees for them, so richness
-  does not substitute for fit. And inflating the browsers' fitted layout
-  (every limit to 10, every card given a summary, two meta lines and two
-  buttons) lowers their reward, so clutter and quantity cost something.
+- Volume does not pay by itself, in three forms. A layout fitted to
+  patient readers (dense and long) beats maximal random trees for them, so
+  richness does not substitute for fit. Raising every limit to 10 on the
+  browsers' fitted layout does not raise their reward, so quantity alone
+  pays nothing. Loading every card on it with a summary, two meta lines and
+  two buttons lowers their reward, so clutter costs. The last two are
+  separate checks on purpose: bundled, the limit effect masked the fact
+  that buttons everywhere were still farming action reward.
 
 ## Baselines and the first finding
 

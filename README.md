@@ -4,7 +4,7 @@ Generative UI framework. Developers define UI components at compile time as a ty
 (components, slots, valid slot types); at runtime a model assembles a personalised UI from that
 grammar. Currently at step one: getting the grammar right.
 
-Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/sampler.md) for the decision interface, [docs/gallery.md](docs/gallery.md) for the look-and-fix loop, and [docs/simulator.md](docs/simulator.md) for events, reward and synthetic users.
+Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/sampler.md) for the decision interface, [docs/gallery.md](docs/gallery.md) for the look-and-fix loop, [docs/simulator.md](docs/simulator.md) for events, reward and synthetic users, and [docs/policy.md](docs/policy.md) for the first learned policy.
 
 ## Layout
 
@@ -25,6 +25,8 @@ Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/s
 | `src/events.ts`, `src/reward.ts` | Event format shared by simulator and real instrumentation; composite per-session reward |
 | `src/sim/` | Synthetic readers, one-session simulation, episode runner, baseline comparison CLI |
 | `src/check-sim.ts` | Simulator checks (determinism, path validity, preferences move reward) |
+| `src/policy/` | State features, linear softmax policy, REINFORCE trainer, train-and-evaluate CLI |
+| `src/check-policy.ts` | Policy checks (determinism, untrained = uniform, short training improves) |
 | `schema/newsfeed.schema.json`, `schema/newsfeed.grammar.json` | Generated; do not edit |
 | `examples/` | Example UI trees |
 
@@ -40,4 +42,5 @@ npm run count    # derivation-space sizes
 npm run sample -- --seed 1 --n 3 --policy local   # print sampled UI documents
 npm run gallery -- --seed 1 --n 20               # render 20 samples to gallery/index.html
 npm run simulate -- --users 300 --sessions 10    # compare baseline policies on synthetic users; trajectories to out/
+npm run train                                    # train the linear policy, evaluate vs baselines on held-out users
 ```

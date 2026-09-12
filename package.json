@@ -6,12 +6,13 @@
   "description": "Generative UI framework: typed component grammars, model-assembled layouts.",
   "scripts": {
     "schema": "node src/build-schema.ts && node src/export-grammar.ts",
-    "check": "tsc --noEmit && node src/validate.ts && node src/check-sampler.ts && node src/check-sim.ts",
+    "check": "tsc --noEmit && node src/validate.ts && node src/check-sampler.ts && node src/check-sim.ts && node src/check-policy.ts",
     "count": "node src/count-space.ts",
     "sample": "node src/sample-cli.ts",
     "gallery": "node src/gallery.ts",
     "simulate": "node src/sim/run.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "train": "node src/policy/run.ts"
   },
   "devDependencies": {
     "@types/node": "^24.13.4",

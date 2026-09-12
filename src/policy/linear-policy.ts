@@ -80,10 +80,12 @@ export class LinearPolicy {
     }
   }
 
+  /** Gradient step. L2 decay applies to every weight vector, not only those in this batch. */
   applyGradient(grads: Map<string, Float64Array>, lr: number, l2 = 0): void {
-    for (const [k, g] of grads) {
-      const w = this.vector(k);
-      for (let i = 0; i < STATE_DIM; i++) w[i] += lr * g[i] - lr * l2 * w[i];
+    for (const k of grads.keys()) this.vector(k);
+    for (const [k, w] of this.weights) {
+      const g = grads.get(k);
+      for (let i = 0; i < STATE_DIM; i++) w[i] += lr * (g?.[i] ?? 0) - lr * l2 * w[i];
     }
   }
 

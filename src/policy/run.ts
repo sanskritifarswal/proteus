@@ -23,7 +23,9 @@ const maxSessions = Number(opt('sessions', '10'));
 const lr = Number(opt('lr', '0.15'));
 const seed = Number(opt('seed', '1'));
 const outDir = opt('out', 'out');
-if (![iterations, usersPerIteration, maxSessions, seed].every(Number.isInteger) || !(lr > 0)) {
+if (![iterations, usersPerIteration, maxSessions, seed].every(Number.isInteger)
+  || iterations < 1 || usersPerIteration < 1 || maxSessions < 1
+  || !Number.isFinite(lr) || !(lr > 0)) {
   console.error('usage: node src/policy/run.ts [--iterations <int>] [--users <int>] [--sessions <int>] [--lr <float>] [--seed <int>] [--out dir]');
   process.exit(2);
 }

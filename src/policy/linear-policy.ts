@@ -45,6 +45,9 @@ export class LinearPolicy {
    */
   readonly mean = new Float64Array(STATE_DIM);
   readonly scale = new Float64Array(STATE_DIM).fill(1);
+  private readonly m = new Map<string, Float64Array>();
+  private readonly v = new Map<string, Float64Array>();
+  private steps = 0;
   constructor(temperature = 1) { this.temperature = temperature; }
 
   normalize(state: Float64Array): Float64Array {
@@ -54,9 +57,19 @@ export class LinearPolicy {
     return z;
   }
 
-  /** Blend batch statistics into the stored normaliser (EMA, so evaluation sees a stable transform). */
+  /**
+   * Blend batch statistics into the stored normaliser (EMA), then transform
+   * every weight vector so that every logit is exactly unchanged:
+   *   w·((s−m)/σ) = w'·((s−m')/σ') with w'_i = w_i σ'_i/σ_i and
+   *   bias' = bias + Σ_i w_i (m'_i − m_i)/σ_i.
+   * So a normaliser update never changes behaviour on its own; only the
+   * optimizer does. Adam moments are rescaled the same way. Call this after
+   * a gradient step, not between a rollout and its update.
+   */
   updateNormalizer(states: Float64Array[], rate = 0.2): void {
     if (states.length === 0) return;
+    const oldMean = Float64Array.from(this.mean);
+    const oldScale = Float64Array.from(this.scale);
     for (let i = 1; i < STATE_DIM; i++) {
       let m = 0; for (const s of states) m += s[i]; m /= states.length;
       let v = 0; for (const s of states) v += (s[i] - m) ** 2; v /= states.length;
@@ -64,6 +77,18 @@ export class LinearPolicy {
       this.mean[i] += rate * (m - this.mean[i]);
       this.scale[i] += rate * (sd - this.scale[i]);
     }
+    const ratio = new Float64Array(STATE_DIM);
+    for (let i = 1; i < STATE_DIM; i++) ratio[i] = this.scale[i] / oldScale[i];
+    for (const w of this.weights.values()) {
+      let shift = 0;
+      for (let i = 1; i < STATE_DIM; i++) {
+        shift += (w[i] * (this.mean[i] - oldMean[i])) / oldScale[i];
+        w[i] *= ratio[i];
+      }
+      w[0] += shift;
+    }
+    for (const m of this.m.values()) for (let i = 1; i < STATE_DIM; i++) m[i] *= ratio[i];
+    for (const v of this.v.values()) for (let i = 1; i < STATE_DIM; i++) v[i] *= ratio[i] * ratio[i];
   }
 
   vector(key: string): Float64Array {
@@ -131,10 +156,6 @@ export class LinearPolicy {
       for (let i = 0; i < STATE_DIM; i++) g[i] += coeff * step.state[i];
     }
   }
-
-  private readonly m = new Map<string, Float64Array>();
-  private readonly v = new Map<string, Float64Array>();
-  private steps = 0;
 
   /**
    * Gradient step. `optimizer` 'sgd' applies lr·g directly. 'adam' normalises

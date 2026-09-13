@@ -31,11 +31,13 @@ collapsed to slot names so the same choice at `sections[0]` and
 ## How it learns
 
 Each iteration a fresh population runs one episode each. Every decision is
-recorded with its state and probabilities. The reward-to-go from each
-session is compared with a running per-session-index baseline, advantages
-are standardised over the batch, and each decision's log-probability
-gradient is scaled by its session's advantage. Plain policy gradient with a
-moving baseline.
+recorded with its (centred) state and probabilities. The reward-to-go from
+each session is compared with a linear value baseline fit on the batch,
+advantages are standardised within each session index, and each
+decision's log-probability gradient is scaled by its session's advantage.
+Weights are updated with Adam. After the step, the feature normaliser is
+blended toward the batch statistics with a logit-preserving transform of
+the weights, so the update changes nothing the optimizer did not.
 
 ## Result, second version (150 iterations × 200 users, Adam lr 0.02, ε 0.1; held-out 400 mixed users)
 

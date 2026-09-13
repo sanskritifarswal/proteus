@@ -100,10 +100,6 @@ export function train(opts: TrainOptions): TrainResult {
         items.push({ key, togo: togo[s], state: trace.steps[0].rawState, index: s });
       }
     }
-    // Normaliser statistics come from sessions with history; session 0 is
-    // all zeros and would only drag the means down.
-    policy.updateNormalizer(items.filter((x) => x.index > 0).map((x) => x.state));
-
     let advantages: number[];
     if (mode === 'value') {
       value.fit(items.map((x) => x.state), items.map((x) => x.togo));
@@ -138,6 +134,12 @@ export function train(opts: TrainOptions): TrainResult {
     // Adam is scale-free, so it gets the mean gradient at lr; SGD keeps lr / users.
     if (optimizer === 'adam') for (const g of grads.values()) for (let i = 0; i < g.length; i++) g[i] /= users.length;
     policy.applyGradient(grads, optimizer === 'adam' ? opts.lr : opts.lr / users.length, opts.l2, optimizer);
+
+    // Normaliser statistics come from sessions with history (session 0 is all
+    // zeros). Updated after the step so the gradient was applied in the same
+    // coordinates that produced its samples; the update itself is logit-
+    // preserving, so it changes nothing the optimizer did not.
+    policy.updateNormalizer(items.filter((x) => x.index > 0).map((x) => x.state));
 
     history.push(stats.meanEpisodeReward);
     opts.onIteration?.(it, stats.meanEpisodeReward, policy);

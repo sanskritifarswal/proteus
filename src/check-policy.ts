@@ -36,6 +36,19 @@ report(Math.abs(untrained - uniform) < 1e-9, `untrained policy equals per-decisi
 const trained = runEpisodes(learnedScreenPolicy(a.policy), evalPop(), fakeData, 6, 4242).stats.meanEpisodeReward;
 report(trained > untrained * 1.05, `25 iterations improve held-out reward by >5% (${untrained.toFixed(2)} -> ${trained.toFixed(2)})`);
 
+// A normaliser update is logit-preserving: probabilities before and after are identical.
+{
+  const p = a.policy;
+  const sp = learnedScreenPolicy(p);
+  runEpisodes(sp, makePopulation(30, makeRng(99)), fakeData, 4, 99);
+  const steps = [...sp.traces.values()].flatMap((t) => t.steps).filter((st) => st.rawState[1] > 0).slice(0, 200);
+  const before = steps.map((st) => [...p.probs({ kind: 'props', path: '', component: 'Screen', context: 'screen', options: ['{"density":"compact"}', '{"density":"comfortable"}'], weights: [1n, 1n] }, st.rawState).probs]);
+  p.updateNormalizer(steps.map((st) => st.rawState), 0.7);
+  const after = steps.map((st) => [...p.probs({ kind: 'props', path: '', component: 'Screen', context: 'screen', options: ['{"density":"compact"}', '{"density":"comfortable"}'], weights: [1n, 1n] }, st.rawState).probs]);
+  const maxDiff = Math.max(...before.map((b, i) => Math.max(...b.map((x, j) => Math.abs(x - after[i][j])))));
+  report(maxDiff < 1e-9, `normaliser update preserves every decision probability (max change ${maxDiff.toExponential(1)})`);
+}
+
 // Personalisation: with history, power readers must be shown compact more
 // often than browsers. This is the property the feature centring exists for;
 // without it the gap sits at zero no matter how long training runs.

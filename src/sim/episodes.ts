@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { UIDocument } from '../tree.ts';
-import type { Trajectory } from '../events.ts';
+import type { SessionRecord, Trajectory } from '../events.ts';
 import type { FeedData } from '../fake-data.ts';
 import { makeRng, type Rng } from '../rng.ts';
 import { localUniform, sample, uniformDerivation, type Policy } from '../sample.ts';
@@ -11,10 +11,12 @@ import { newsfeed } from '../grammars/newsfeed.ts';
 
 /**
  * Episode = one user over up to `maxSessions` sessions; it ends early when
- * the user does not return. A ScreenPolicy picks the tree for each session.
- * Baselines: a random derivation per session, or one fixed tree.
+ * the user does not return. A ScreenPolicy picks the tree for each session,
+ * given the user's id (for bookkeeping only), the session index, an rng,
+ * and what a local scorer could observe: the user's earlier sessions in
+ * this episode and their rewards. Baselines ignore the history.
  */
-export type ScreenPolicy = (user: SimUser, session: number, rng: Rng) => UIDocument;
+export type ScreenPolicy = (user: SimUser, session: number, rng: Rng, history: SessionRecord[], rewards: number[]) => UIDocument;
 
 export function randomScreenPolicy(kind: 'local' | 'uniform'): ScreenPolicy {
   return (_user, _session, rng) => {
@@ -63,8 +65,9 @@ export function runEpisodes(
     const rng = makeRng(seed * 1_000_003 + ui);
     const state: SimState = { seen: new Set(), sessionsSoFar: 0 };
     const traj: Trajectory = { user: user.id, sessions: [] };
+    const rewardsSoFar: number[] = [];
     for (let s = 0; s < maxSessions; s++) {
-      const doc = policy(user, s, rng);
+      const doc = policy(user, s, rng, traj.sessions, rewardsSoFar);
       const rec = simulateSession(user, doc.tree, data, doc.grammar, s, state, rng);
       // The window ends at maxSessions: whether the user returns after the
       // last session is never observed either way, so the outcome is
@@ -72,7 +75,9 @@ export function runEpisodes(
       if (s === maxSessions - 1) rec.returned = null;
       traj.sessions.push(rec);
       sessions++;
-      totalReward += sessionReward(rec, weights);
+      const r = sessionReward(rec, weights);
+      rewardsSoFar.push(r);
+      totalReward += r;
       if (rec.returned !== null) observed++;
       if (rec.returned) returns++;
       for (const e of rec.events) {

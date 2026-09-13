@@ -46,10 +46,10 @@ the weights, so the update changes nothing the optimizer did not.
 | random-local | 34.7 | 3.50 | 74% |
 | random-uniform (best baseline) | 40.7 | 3.62 | 75% |
 | fixed-dense-list (best fixed) | 39.3 | 3.67 | 77% |
-| learned, sampled | 54.2 | 4.28 | 81% |
-| learned, greedy | 58.8 | 4.50 | 82% |
+| learned, sampled | 54.5 | 4.46 | 82% |
+| learned, greedy | 59.3 | 4.61 | 83% |
 
-45% over the best baseline on users the trainer never saw, up from 24% in
+46% over the best baseline on users the trainer never saw, up from 24% in
 the first version. Dismissals are zero under the greedy policy.
 
 ## What it learned, by archetype
@@ -58,17 +58,17 @@ Choices from session 2 on, when history exists:
 
 | archetype | reward | compact density | sections | hero lead | compact items | buttons/card |
 |---|---|---|---|---|---|---|
-| power-reader | 126.8 | 96% | 4.6 | 0.27 | 77% | 1.00 |
-| browser | 28.5 | 10% | 2.6 | 0.23 | 4% | 0.25 |
-| local-loyalist | 64.6 | 65% | 3.4 | 0.19 | 28% | 0.67 |
-| casual | 8.8 | 0% | 2.2 | 0.08 | 0% | 0.28 |
+| power-reader | 125.4 | 95% | 4.7 | 0.06 | 64% | 1.03 |
+| browser | 26.0 | 33% | 3.5 | 0.16 | 10% | 0.62 |
+| local-loyalist | 59.2 | 71% | 4.0 | 0.15 | 33% | 0.70 |
+| casual | 10.1 | 18% | 3.4 | 0.27 | 5% | 0.19 |
 
 The conditioning gap (compact for power readers minus compact for
-browsers) is 86 points. It conditions more than density: power readers get
+browsers) is 63 points. It conditions more than density: power readers get
 long screens of compact cards with buttons; browsers and casual readers
-get short, comfortable screens of standard cards with almost no buttons.
-Browsers' reward rose from about 17 (first version, which showed them
-compact) to 28.5.
+get shorter, mostly comfortable screens of standard cards with fewer
+buttons. Browsers' reward rose from about 17 (first version, which showed
+them compact) to 26.
 
 ## How it got there: what did not work, and what did
 
@@ -85,7 +85,7 @@ Six changes were tried, each measured by the gap on held-out archetypes:
 | + per-session-index advantage standardisation | 51.6 | −5 |
 | + Adam | 53.5 | 0 |
 | **+ centred features** (SGD, 80 it) | 47.2 | **29** |
-| **+ centred features + Adam** (150 it) | **58.8** | **86** |
+| **+ centred features + Adam** (150 it) | **59.3** | **63** |
 
 Variance reduction, credit assignment, exploration and the optimiser each
 raised the score a little and none of them moved the gap. A probe of the
@@ -107,6 +107,10 @@ history exists, and dwell was pinned at its cap; both were replaced.
 Centring alone produced the gap. Adam on top of centring produced the
 score, because per-parameter step normalisation lets the small, signed
 personalising gradients move their weights as far as the large global one.
+(An earlier version of this table showed a gap of 86; part of that came
+from the normaliser moving between a rollout and its update, which changed
+behaviour outside the optimizer. With logit-preserving updates the honest
+figure is 63.)
 
 ## Value baseline
 

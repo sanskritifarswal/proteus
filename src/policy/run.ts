@@ -27,19 +27,20 @@ const baselineMode = opt('baseline', 'value') as 'index' | 'value';
 const epsilon = Number(opt('epsilon', '0.1'));
 const standardize = opt('standardize', 'index') as 'batch' | 'index';
 const optimizer = opt('optimizer', 'adam') as 'sgd' | 'adam';
+const creditMode = opt('credit', 'session') as 'session' | 'path';
 const outDir = opt('out', 'out');
 if (![iterations, usersPerIteration, maxSessions, seed].every(Number.isInteger)
   || iterations < 1 || usersPerIteration < 1 || maxSessions < 1
   || !Number.isFinite(lr) || !(lr > 0) || !(gamma > 0 && gamma <= 1) || !['index', 'value'].includes(baselineMode)
-  || !(epsilon >= 0 && epsilon < 1) || !['batch', 'index'].includes(standardize) || !['sgd', 'adam'].includes(optimizer)) {
-  console.error('usage: node src/policy/run.ts [--iterations <int>] [--users <int>] [--sessions <int>] [--lr <float>] [--gamma (0,1]] [--baseline index|value] [--epsilon [0,1)] [--standardize batch|index] [--optimizer sgd|adam] [--seed <int>] [--out dir]');
+  || !(epsilon >= 0 && epsilon < 1) || !['batch', 'index'].includes(standardize) || !['sgd', 'adam'].includes(optimizer) || !['session', 'path'].includes(creditMode)) {
+  console.error('usage: node src/policy/run.ts [--iterations <int>] [--users <int>] [--sessions <int>] [--lr <float>] [--gamma (0,1]] [--baseline index|value] [--epsilon [0,1)] [--standardize batch|index] [--optimizer sgd|adam] [--credit session|path] [--seed <int>] [--out dir]');
   process.exit(2);
 }
 
-console.log(`training: ${iterations} iterations x ${usersPerIteration} users x up to ${maxSessions} sessions, lr ${lr}, gamma ${gamma}, baseline ${baselineMode}, epsilon ${epsilon}, standardize ${standardize}, optimizer ${optimizer}, seed ${seed}`);
+console.log(`training: ${iterations} iterations x ${usersPerIteration} users x up to ${maxSessions} sessions, lr ${lr}, gamma ${gamma}, baseline ${baselineMode}, epsilon ${epsilon}, standardize ${standardize}, optimizer ${optimizer}, credit ${creditMode}, seed ${seed}`);
 const t0 = Date.now();
 const { policy, lastBatch } = train({
-  iterations, usersPerIteration, maxSessions, lr, l2: 0.001, seed, gamma, baseline: baselineMode, epsilon, standardize, optimizer,
+  iterations, usersPerIteration, maxSessions, lr, l2: 0.001, seed, gamma, baseline: baselineMode, epsilon, standardize, optimizer, credit: creditMode,
   onIteration: (i, r) => { if (i % 10 === 0 || i === iterations - 1) console.log(`  iter ${String(i).padStart(3)}  train mean episode reward ${r.toFixed(2)}`); },
 });
 console.log(`trained in ${((Date.now() - t0) / 1000).toFixed(1)}s; ${policy.weights.size} option keys x ${STATE_NAMES.length} state features`);

@@ -84,3 +84,51 @@ export function sessionReward(rec: SessionRecord, w: RewardWeights = defaultWeig
     (rec.returned ? w.returned : 0)
   );
 }
+
+/**
+ * Decompose a session's reward into contributions by node path, plus a
+ * shared remainder with no path (the return bonus). Sums exactly to
+ * sessionReward. Saturating terms are split across the events that formed
+ * them in proportion to each event's contribution, so a card that earned
+ * two of five opens gets two fifths of the opens term.
+ *
+ * This is what lets a decision be credited for what happened under its own
+ * subtree rather than for the whole session.
+ */
+export function attributeReward(rec: SessionRecord, w: RewardWeights = defaultWeights): { byPath: Map<string, number>; shared: number } {
+  validateWeights(w);
+  const byPath = new Map<string, number>();
+  const add = (path: string, x: number) => { if (x !== 0) byPath.set(path, (byPath.get(path) ?? 0) + x); };
+
+  const opens: string[] = [];
+  const completes: Array<[string, number]> = [];
+  const dwells: Array<[string, number]> = [];
+  const positives: Array<[string, number]> = [];
+  for (const e of rec.events) {
+    switch (e.type) {
+      case 'open': opens.push(e.path); break;
+      case 'complete': completes.push([e.path, e.value]); break;
+      case 'dwell': dwells.push([e.path, e.value]); break;
+      case 'scroll_past': add(e.path, w.scrollPast); break;
+      case 'action':
+        if (e.action === 'save') positives.push([e.path, w.save]);
+        else if (e.action === 'share') positives.push([e.path, w.share]);
+        else if (e.action === 'follow') positives.push([e.path, w.follow]);
+        else if (e.action === 'dismiss') add(e.path, w.dismiss);
+        break;
+    }
+  }
+  const spread = (items: Array<[string, number]>, total: number) => {
+    const sum = items.reduce((a, [, v]) => a + v, 0);
+    if (sum <= 0) return;
+    for (const [path, v] of items) add(path, (total * v) / sum);
+  };
+  const openTerm = w.open * Math.sqrt(opens.length);
+  for (const path of opens) add(path, openTerm / opens.length);
+  spread(completes, w.completion * Math.sqrt(completes.reduce((a, [, v]) => a + v, 0)));
+  const dwellTotal = dwells.reduce((a, [, v]) => a + v, 0);
+  const dwellMin = Math.min(dwellTotal / 60000, w.dwellCapMinutes);
+  spread(dwells, w.dwellPerMinute * dwellMin);
+  spread(positives, Math.sqrt(positives.reduce((a, [, v]) => a + v, 0)));
+  return { byPath, shared: rec.returned ? w.returned : 0 };
+}

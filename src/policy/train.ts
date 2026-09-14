@@ -5,7 +5,7 @@ import { makeRng } from '../rng.ts';
 import { sample } from '../sample.ts';
 import { newsfeed } from '../grammars/newsfeed.ts';
 import { fakeData } from '../fake-data.ts';
-import { sessionReward } from '../reward.ts';
+import { attributeReward, sessionReward } from '../reward.ts';
 import { makePopulation, type SimUser } from '../sim/users.ts';
 import { fixedScreenPolicy, loadExample, randomScreenPolicy, runEpisodes, type ScreenPolicy } from '../sim/episodes.ts';
 import { stateFromHistory } from './features.ts';
@@ -41,6 +41,13 @@ export interface TrainOptions {
   standardize?: 'batch' | 'index';
   /** 'sgd' scales the summed gradient by lr / users; 'adam' normalises per weight. */
   optimizer?: 'sgd' | 'adam';
+  /**
+   * 'session': every decision in a session shares the session's advantage.
+   * 'path': a decision is credited with the reward attributed to event paths
+   * related to its own path (its subtree, or an ancestor), plus the shared
+   * session-level part; the local part is baselined per decision key.
+   */
+  credit?: 'session' | 'path';
   /** Called after each iteration with the mean episode reward on the training batch. */
   onIteration?: (i: number, meanReward: number, policy: LinearPolicy) => void;
 }
@@ -58,6 +65,12 @@ export function learnedScreenPolicy(policy: LinearPolicy, greedy = false, epsilo
   return sp;
 }
 
+/** Segment-aware: is one path an ancestor-or-self of the other? The root ('') relates to everything. */
+export function related(decisionPath: string, eventPath: string): boolean {
+  const pre = (a: string, b: string) => a === '' || b === a || b.startsWith(a + '.') || b.startsWith(a + '[');
+  return pre(decisionPath, eventPath) || pre(eventPath, decisionPath);
+}
+
 export interface TrainResult {
   policy: LinearPolicy;
   value: LinearValue;
@@ -72,6 +85,8 @@ export function train(opts: TrainOptions): TrainResult {
   const epsilon = opts.epsilon ?? 0.1;
   const standardize = opts.standardize ?? 'index';
   const optimizer = opts.optimizer ?? 'adam';
+  const credit = opts.credit ?? 'session';
+  const localBaseline = new Map<string, { mean: number; n: number }>();
   const policy = new LinearPolicy();
   const value = new LinearValue();
   const indexBaseline = new Float64Array(opts.maxSessions);
@@ -86,10 +101,14 @@ export function train(opts: TrainOptions): TrainResult {
     const { trajectories, stats } = runEpisodes(sp, users, fakeData, opts.maxSessions, popSeed);
 
     // Discounted reward-to-go per session, then advantages against the baseline.
-    type Item = { key: string; togo: number; state: Float64Array; index: number };
+    // With path credit the session-level part is the shared remainder of this
+    // session plus all later sessions; the local part is what happened under
+    // the decision's own subtree this session.
+    type Item = { key: string; togo: number; state: Float64Array; index: number; local: number[] };
     const items: Item[] = [];
     for (const t of trajectories) {
       const rewards = t.sessions.map((s) => sessionReward(s));
+      const attributed = credit === 'path' ? t.sessions.map((s) => attributeReward(s)) : [];
       let g = 0;
       const togo = new Array<number>(rewards.length);
       for (let s = rewards.length - 1; s >= 0; s--) { g = rewards[s] + gamma * g; togo[s] = g; }
@@ -97,7 +116,18 @@ export function train(opts: TrainOptions): TrainResult {
         const key = `${t.user}:${s}`;
         const trace = sp.traces.get(key);
         if (!trace || trace.steps.length === 0) continue;
-        items.push({ key, togo: togo[s], state: trace.steps[0].rawState, index: s });
+        if (credit === 'path') {
+          const { byPath, shared } = attributed[s];
+          const futureTogo = togo[s] - rewards[s];
+          const local = trace.steps.map((step) => {
+            let sum = 0;
+            for (const [ep, v] of byPath) if (related(step.path, ep)) sum += v;
+            return sum;
+          });
+          items.push({ key, togo: shared + futureTogo, state: trace.steps[0].rawState, index: s, local });
+        } else {
+          items.push({ key, togo: togo[s], state: trace.steps[0].rawState, index: s, local: [] });
+        }
       }
     }
     let advantages: number[];
@@ -113,23 +143,38 @@ export function train(opts: TrainOptions): TrainResult {
     }
     const variance = (xs: number[]) => { const m = xs.reduce((a, b) => a + b, 0) / xs.length; return xs.reduce((a, b) => a + (b - m) ** 2, 0) / xs.length; };
     lastBatch = { returnVariance: variance(items.map((x) => x.togo)), advantageVariance: variance(advantages) };
+
     // Standardise. Session 0 is cold for everyone, so its returns carry the
     // whole hidden-type variance; standardising per index keeps that from
     // shrinking every later session's signal.
     const groups = new Map<number, number[]>();
     items.forEach((x, i) => { const k = standardize === 'index' ? x.index : 0; (groups.get(k) ?? groups.set(k, []).get(k)!).push(i); });
     const scaled = new Array<number>(advantages.length);
+    const groupSd = new Array<number>(advantages.length);
     for (const idx of groups.values()) {
       const vals = idx.map((i) => advantages[i]);
       const m = vals.reduce((a, b) => a + b, 0) / vals.length;
       const sd = Math.sqrt(variance(vals)) || 1;
-      for (const i of idx) scaled[i] = (advantages[i] - m) / sd;
+      for (const i of idx) { scaled[i] = (advantages[i] - m) / sd; groupSd[i] = sd; }
     }
 
+    // Local (path) advantages: baselined by a running mean per decision key,
+    // then divided by the same spread that standardised this item's
+    // session-level advantage (its own group's), so the two parts are
+    // commensurate at every session index.
     const grads = new Map<string, Float64Array>();
-    items.forEach(({ key }, i) => {
+    items.forEach(({ key, local }, i) => {
       const trace = sp.traces.get(key)!;
-      for (const step of trace.steps) LinearPolicy.accumulate(grads, step, scaled[i]);
+      trace.steps.forEach((step, j) => {
+        let a = scaled[i];
+        if (credit === 'path') {
+          const k = step.keys[step.chosen].split('|').slice(0, 3).join('|');
+          const b = localBaseline.get(k) ?? { mean: 0, n: 0 };
+          a += (local[j] - b.mean) / groupSd[i];
+          b.n += 1; b.mean += (local[j] - b.mean) / b.n; localBaseline.set(k, b);
+        }
+        LinearPolicy.accumulate(grads, step, a);
+      });
     });
     // Adam is scale-free, so it gets the mean gradient at lr; SGD keeps lr / users.
     if (optimizer === 'adam') for (const g of grads.values()) for (let i = 0; i < g.length; i++) g[i] /= users.length;

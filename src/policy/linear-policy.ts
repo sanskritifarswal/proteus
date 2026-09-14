@@ -15,6 +15,8 @@ import { STATE_DIM, optionKey } from './features.ts';
  * after the episode's rewards are known.
  */
 export interface Step {
+  /** Tree path of the decision, for path-based credit. */
+  path: string;
   keys: string[];
   /** Softmax probabilities of the policy itself. */
   probs: Float64Array;
@@ -134,7 +136,7 @@ export class LinearPolicy {
         chosen = n - 1;
         for (let i = 0; i < n; i++) { if (r < sampled[i]) { chosen = i; break; } r -= sampled[i]; }
       }
-      trace?.steps.push({ keys, probs, sampled, epsilon, chosen, state: z, rawState: state });
+      trace?.steps.push({ path: d.path, keys, probs, sampled, epsilon, chosen, state: z, rawState: state });
       return chosen;
     };
   }

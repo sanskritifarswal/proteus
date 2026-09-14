@@ -75,7 +75,7 @@ report(trained > untrained * 1.05, `25 iterations improve held-out reward by >5%
   };
   const full = twinGap([]);
   const ablated = twinGap(EVIDENCE);
-  report(full > 20 && ablated < 15 && full > ablated + 15, `evidence features let the policy tell the twins apart (gap ${full.toFixed(0)} points with them, ${ablated.toFixed(0)} without)`);
+  report(full > 20 && Math.abs(ablated) < 15 && full > ablated + 15, `evidence features let the policy tell the twins apart (gap ${full.toFixed(0)} points with them, ${ablated.toFixed(0)} without)`);
 }
 
 console.log(failures ? `\n${failures} policy check(s) failed` : '\npolicy checks passed');

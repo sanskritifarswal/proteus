@@ -19,6 +19,11 @@ const opt = (name: string, dflt: string) => { const i = args.indexOf(`--${name}`
 const iterations = Number(opt('iterations', '150'));
 const users = Number(opt('users', '200'));
 const seeds = opt('seeds', '1,2').split(',').map(Number);
+if (!Number.isInteger(iterations) || iterations < 1 || !Number.isInteger(users) || users < 2
+  || seeds.length === 0 || !seeds.every(Number.isInteger)) {
+  console.error('usage: node src/policy/experiment-twins.ts [--iterations <int>=1] [--users <int>=2] [--seeds a,b,...]');
+  process.exit(2);
+}
 const TWINS = ['twin-compact', 'twin-comfortable'];
 const EVIDENCE = ['evCompactDensity', 'evCompactItems', 'evHeroLead', 'evButtons'].map((n) => STATE_NAMES.indexOf(n as typeof STATE_NAMES[number]));
 const maxSessions = 10;

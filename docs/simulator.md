@@ -62,6 +62,13 @@ casual. Latent fields: density and visual preference, topic affinities,
 patience, curiosity, read depth, social propensity, return baseline. The
 policy never sees these; it only sees events.
 
+Two more, **twin-compact** and **twin-comfortable**, are identical in every
+parameter except density preference and are visually neutral. Their
+engagement summaries look the same; only trying both densities tells them
+apart. They have zero weight in the default mix and exist to test whether
+within-episode experimentation pays (see docs/policy.md). `makePopulation`
+accepts a list of archetype names for an exact round-robin mix.
+
 ## One session (`src/sim/simulate.ts`)
 
 Walk the tree in render order. For each shown article: does the user still

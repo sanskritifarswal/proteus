@@ -3,6 +3,7 @@ import { fakeData } from './fake-data.ts';
 import { makePopulation } from './sim/users.ts';
 import { randomScreenPolicy, runEpisodes } from './sim/episodes.ts';
 import { choiceSummary, learnedScreenPolicy, train } from './policy/train.ts';
+import { STATE_NAMES } from './policy/features.ts';
 
 /**
  * Policy checks, kept short so `npm run check` stays fast: training is
@@ -58,6 +59,23 @@ report(trained > untrained * 1.05, `25 iterations improve held-out reward by >5%
   const browser = gap('browser');
   const points = (power - browser) * 100;
   report(points > 10, `learned policy conditions density on the user (compact for power readers ${(power * 100).toFixed(0)}%, browsers ${(browser * 100).toFixed(0)}%, gap ${points.toFixed(0)} points, need > 10)`);
+}
+
+// Within-episode experimentation: on the twins (identical engagement
+// statistics, opposite density preferences) only the choice-evidence
+// features can tell users apart. With them the policy shows compact to
+// twin-compact far more than to twin-comfortable; with them zeroed it cannot.
+{
+  const TWINS = ['twin-compact', 'twin-comfortable'];
+  const EVIDENCE = ['evCompactDensity', 'evCompactItems', 'evHeroLead', 'evButtons'].map((n) => STATE_NAMES.indexOf(n as typeof STATE_NAMES[number]));
+  const twinGap = (mask: number[]) => {
+    const { policy } = train({ iterations: 40, usersPerIteration: 120, maxSessions: 8, lr: 0.02, l2: 0.001, seed: 5, archetypes: TWINS, maskFeatures: mask });
+    const c = (a: string) => choiceSummary(learnedScreenPolicy(policy, false, 0, mask), makePopulation(200, makeRng(5151), a), 8, 5151)!.compactDensity;
+    return (c('twin-compact') - c('twin-comfortable')) * 100;
+  };
+  const full = twinGap([]);
+  const ablated = twinGap(EVIDENCE);
+  report(full > 20 && Math.abs(ablated) < 15 && full > ablated + 15, `evidence features let the policy tell the twins apart (gap ${full.toFixed(0)} points with them, ${ablated.toFixed(0)} without)`);
 }
 
 console.log(failures ? `\n${failures} policy check(s) failed` : '\npolicy checks passed');

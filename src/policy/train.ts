@@ -48,6 +48,10 @@ export interface TrainOptions {
    * session-level part; the local part is baselined per decision key.
    */
   credit?: 'session' | 'path';
+  /** Archetype mix for the training population; default is the weighted mix. */
+  archetypes?: string[];
+  /** State feature indices zeroed before the policy sees them (ablations). */
+  maskFeatures?: number[];
   /** Called after each iteration with the mean episode reward on the training batch. */
   onIteration?: (i: number, meanReward: number, policy: LinearPolicy) => void;
 }
@@ -57,10 +61,11 @@ const topicByTitle = new Map<string, string>();
 for (const feed of Object.values(fakeData.feeds)) for (const a of feed.articles) topicByTitle.set(a.title, a.topic);
 const topicOf = (title: string) => topicByTitle.get(title);
 
-export function learnedScreenPolicy(policy: LinearPolicy, greedy = false, epsilon = 0): ScreenPolicy & { traces: Map<string, Trace> } {
+export function learnedScreenPolicy(policy: LinearPolicy, greedy = false, epsilon = 0, maskFeatures: number[] = []): ScreenPolicy & { traces: Map<string, Trace> } {
   const traces = new Map<string, Trace>();
   const sp = ((user: SimUser, session: number, rng: Rng, history, rewards): UIDocument => {
     const state = stateFromHistory(history, rewards, topicOf);
+    for (const i of maskFeatures) state[i] = 0;
     const trace: Trace = { steps: [] };
     traces.set(`${user.id}:${session}`, trace);
     return sample(newsfeed, policy.forState(state, rng, trace, greedy, epsilon));
@@ -100,8 +105,8 @@ export function train(opts: TrainOptions): TrainResult {
 
   for (let it = 0; it < opts.iterations; it++) {
     const popSeed = opts.seed * 7919 + it;
-    const users = makePopulation(opts.usersPerIteration, makeRng(popSeed));
-    const sp = learnedScreenPolicy(policy, false, epsilon);
+    const users = makePopulation(opts.usersPerIteration, makeRng(popSeed), opts.archetypes);
+    const sp = learnedScreenPolicy(policy, false, epsilon, opts.maskFeatures ?? []);
     const { trajectories, stats } = runEpisodes(sp, users, fakeData, opts.maxSessions, popSeed);
 
     // Discounted reward-to-go per session, then advantages against the baseline.

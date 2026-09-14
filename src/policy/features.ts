@@ -15,7 +15,7 @@ import type { Decision } from '../sample.ts';
 export const STATE_DIM = 11;
 export const STATE_NAMES = [
   'bias', 'session', 'openRate', 'meanCompletion', 'dismissRate', 'scrollPastRate',
-  'actionRate', 'dwell', 'lastReturned', 'lastCompact', 'lastReward',
+  'actionRate', 'dwell', 'lastOpens', 'lastCompact', 'lastReward',
 ] as const;
 
 export function stateFromHistory(history: SessionRecord[], rewards: number[]): Float64Array {
@@ -42,8 +42,10 @@ export function stateFromHistory(history: SessionRecord[], rewards: number[]): F
   s[4] = impressions ? dismiss / impressions : 0;
   s[5] = impressions ? scrollPast / impressions : 0;
   s[6] = opens ? actions / opens : 0;
-  s[7] = Math.min(dwellMs / 60000 / history.length / 5, 1);
-  s[8] = last.returned === true ? 1 : 0;
+  s[7] = Math.min(dwellMs / 60000 / history.length / 15, 1);
+  // Opens in the most recent session. (A "returned last time" feature would
+  // always be 1 here: history only exists for users who came back.)
+  s[8] = Math.min(last.events.filter((e) => e.type === 'open').length / 5, 1);
   s[9] = last.tree.props?.density === 'compact' ? 1 : last.tree.props?.density === 'comfortable' ? -1 : 0;
   s[10] = rewards.length ? Math.max(-1, Math.min(1, rewards[rewards.length - 1] / 20)) : 0;
   return s;

@@ -31,61 +31,125 @@ collapsed to slot names so the same choice at `sections[0]` and
 ## How it learns
 
 Each iteration a fresh population runs one episode each. Every decision is
-recorded with its state and probabilities. The reward-to-go from each
-session is compared with a running per-session-index baseline, advantages
-are standardised over the batch, and each decision's log-probability
-gradient is scaled by its session's advantage. Plain policy gradient with a
-moving baseline.
+recorded with its (centred) state and probabilities. The reward-to-go from
+each session is compared with a linear value baseline fit on the batch,
+advantages are standardised within each session index, and each
+decision's log-probability gradient is scaled by its session's advantage.
+Weights are updated with Adam. After the step, the feature normaliser is
+blended toward the batch statistics with a logit-preserving transform of
+the weights, so the update changes nothing the optimizer did not.
 
-## Result (80 iterations × 150 users, lr 0.15, seed 1; held-out 400 mixed users)
+## Result, second version (150 iterations × 200 users, Adam lr 0.02, ε 0.1; held-out 400 mixed users)
 
 | policy | episode reward | sessions/user | return |
 |---|---|---|---|
 | random-local | 34.7 | 3.50 | 74% |
 | random-uniform (best baseline) | 40.7 | 3.62 | 75% |
 | fixed-dense-list (best fixed) | 39.3 | 3.67 | 77% |
-| learned, sampled | 48.2 | 4.20 | 80% |
-| learned, greedy | 50.4 | 4.21 | 80% |
+| learned, sampled | 54.5 | 4.46 | 82% |
+| learned, greedy | 59.3 | 4.61 | 83% |
 
-The learned policy beats the best baseline by 24% on users it never saw.
-Dismissals drop to near zero and return rate rises five points.
+46% over the best baseline on users the trainer never saw, up from 24% in
+the first version. Dismissals are zero under the greedy policy.
 
-## What it learned, and what it did not
+## What it learned, by archetype
 
-By archetype, choices from session 2 on (when history exists):
+Choices from session 2 on, when history exists:
 
 | archetype | reward | compact density | sections | hero lead | compact items | buttons/card |
 |---|---|---|---|---|---|---|
-| power-reader | 105.8 | 77% | 4.0 | 0.16 | 12% | 0.70 |
-| browser | 17.9 | 79% | 4.0 | 0.15 | 15% | 0.75 |
-| local-loyalist | 60.2 | 75% | 4.0 | 0.15 | 12% | 0.70 |
-| casual | 6.5 | 72% | 4.1 | 0.22 | 8% | 0.81 |
+| power-reader | 125.4 | 95% | 4.7 | 0.06 | 64% | 1.03 |
+| browser | 26.0 | 33% | 3.5 | 0.16 | 10% | 0.62 |
+| local-loyalist | 59.2 | 71% | 4.0 | 0.15 | 33% | 0.70 |
+| casual | 10.1 | 18% | 3.4 | 0.27 | 5% | 0.19 |
 
-It learned a good **global prior**: compact density, four sections,
-standard cards, few buttons, rarely a hero lead. It did **not** learn to
-condition on the user: browsers get compact 79% of the time although the
-simulator says they prefer comfortable. The state carries the information
-(mean completion alone separates power readers from browsers), so this is
-a training-signal problem, not an observability problem: the personalising
-weights sit on interaction terms whose gradient is small and noisy
-relative to the global terms. Training curves confirm the noise (the
-batch mean swings by ±5 between iterations). A longer run, 250 iterations
-× 200 users at lr 0.1, reached the same held-out greedy score (50.5) with
-the same lack of conditioning (compact density 58–62% for every
-archetype), so more of the same training is not the fix.
+The conditioning gap (compact for power readers minus compact for
+browsers) is 63 points. It conditions more than density: power readers get
+long screens of compact cards with buttons; browsers and casual readers
+get shorter, mostly comfortable screens of standard cards with fewer
+buttons. Browsers' reward rose from about 17 (first version, which showed
+them compact) to 26.
 
-Next steps, in order of expected payoff:
+## How it got there: what did not work, and what did
 
-1. Variance reduction: a learned value baseline conditioned on state
-   instead of a per-session-index mean, and larger batches.
-2. Per-session credit: attribute session reward to that session's
-   decisions with a discount, rather than full reward-to-go.
-3. Explicit exploration on the personalising axis (density, item variant)
-   early in an episode, so the history features have signal to condition on.
-4. Then a non-linear model, which is where PyTorch enters.
+The first version learned a global prior and no conditioning (gap ≈ 0).
+Six changes were tried, each measured by the gap on held-out archetypes:
+
+| change | held-out greedy | gap |
+|---|---|---|
+| first version (per-index baseline, SGD lr 0.15, 80 it) | 50.4 | 4 |
+| + value baseline (30% of return variance removed) | 50.5 | 4 |
+| + discount γ = 0.9 | 49.7 | −1 |
+| + large batch, small step (300 users, lr 0.05, 200 it) | 52.8 | −3 |
+| + ε = 0.2 exploration floor | 52.7 | −1 |
+| + per-session-index advantage standardisation | 51.6 | −5 |
+| + Adam | 53.5 | 0 |
+| **+ centred features** (SGD, 80 it) | 47.2 | **29** |
+| **+ centred features + Adam** (150 it) | **59.3** | **63** |
+
+Variance reduction, credit assignment, exploration and the optimiser each
+raised the score a little and none of them moved the gap. A probe of the
+trained weights showed why: every weight on the compact-versus-comfortable
+difference was positive, so the "conditioning" was the global prior
+smeared across all features, and the logit difference was 3 to 4 for every
+archetype.
+
+The structural cause was that all state features are non-negative. For a
+power reader, where compact is good, the gradient pushes the completion
+weight positive. For a browser, where comfortable is good, completion is
+also positive, so the gradient pushes the same weight negative. The two
+cancel and only the bias learns. Centring the features (per-feature mean
+and scale, fit on training batches and stored with the policy) makes
+deviations signed, so both groups push the weight the same way. The probe
+also found two dead features: "returned last time" is always 1 when
+history exists, and dwell was pinned at its cap; both were replaced.
+
+Centring alone produced the gap. Adam on top of centring produced the
+score, because per-parameter step normalisation lets the small, signed
+personalising gradients move their weights as far as the large global one.
+(An earlier version of this table showed a gap of 86; part of that came
+from the normaliser moving between a rollout and its update, which changed
+behaviour outside the optimizer. With logit-preserving updates the honest
+figure is 63.)
+
+## Value baseline
+
+`value.ts` fits a linear V(state) by ridge regression on each batch;
+advantages are reward-to-go minus V. It removes about 30% of return
+variance against about 0% for the per-session-index mean, and is on by
+default. A discount `gamma` is available and off by default; it did not
+help here.
+
+### Is personalisation even there to learn?
+
+Yes. Flipping only `density` on each fixed layout, 400 users per archetype,
+up to 8 sessions (episode reward, comfortable minus compact):
+
+| archetype | editorial-home | dense-list | visual-grid |
+|---|---|---|---|
+| power-reader | −8.9 | −8.0 | −9.5 |
+| browser | +4.3 | +5.5 | +4.9 |
+| local-loyalist | +2.2 | 0.0 | +2.5 |
+| casual | +0.5 | +1.1 | +1.1 |
+
+Opposite signs, and for browsers close to half their total reward. This
+diagnostic is what showed the learner, not the simulator, was the problem.
+
+## Next steps
+
+1. Per-decision credit within a session: today all ~30 decisions in a
+   session share one advantage.
+2. Richer state: per-topic engagement, and what was shown before with what
+   result, so the policy can run its own small experiments on a user.
+3. A non-linear model once the linear one plateaus, which is where PyTorch
+   enters via the grammar JSON export.
+4. Renderer instrumentation producing the same events for real sessions.
 
 ## Checks (`npm run check` runs `src/check-policy.ts`)
 
 - Training is deterministic per seed.
 - The untrained policy behaves exactly like per-decision uniform random.
 - 25 iterations improve held-out reward by more than 5%.
+- The value baseline removes more return variance than the per-index one.
+- The learned policy shows compact to power readers more than to browsers
+  by more than 10 points after 25 iterations (the centring property).

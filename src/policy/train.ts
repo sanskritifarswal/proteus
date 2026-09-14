@@ -10,16 +10,19 @@ import { makePopulation, type SimUser } from '../sim/users.ts';
 import { fixedScreenPolicy, loadExample, randomScreenPolicy, runEpisodes, type ScreenPolicy } from '../sim/episodes.ts';
 import { stateFromHistory } from './features.ts';
 import { LinearPolicy, type Trace } from './linear-policy.ts';
+import { LinearValue } from './value.ts';
 
 /**
  * REINFORCE over the factored policy.
  *
  * Each iteration: a fresh population runs one episode each under the current
  * policy, every decision is recorded with its state and probabilities, the
- * reward-to-go from each session is compared with a per-session-index
- * baseline, and the log-probability gradient of every decision is scaled by
- * that advantage. Plain policy gradient with a moving baseline; no value
- * network, no PyTorch. It is enough to show the loop closes.
+ * (discounted) reward-to-go from each session is compared with a baseline,
+ * and the log-probability gradient of every decision is scaled by that
+ * advantage. Two baselines: a running mean per session index, or a linear
+ * value function of the state (ridge-fit on each batch), which removes the
+ * part of the return the state already predicts and leaves the gradient
+ * only what the decisions changed.
  */
 export interface TrainOptions {
   iterations: number;
@@ -28,66 +31,120 @@ export interface TrainOptions {
   lr: number;
   l2: number;
   seed: number;
+  /** Discount on future sessions when computing reward-to-go. 1 = undiscounted. */
+  gamma?: number;
+  /** 'index': running mean per session index. 'value': linear V(state) fit per batch. */
+  baseline?: 'index' | 'value';
+  /** Uniform exploration mixed into every decision while training. 0 = pure policy. */
+  epsilon?: number;
+  /** Standardise advantages over the whole batch, or separately per session index. */
+  standardize?: 'batch' | 'index';
+  /** 'sgd' scales the summed gradient by lr / users; 'adam' normalises per weight. */
+  optimizer?: 'sgd' | 'adam';
   /** Called after each iteration with the mean episode reward on the training batch. */
   onIteration?: (i: number, meanReward: number, policy: LinearPolicy) => void;
 }
 
 /** Wraps a LinearPolicy as a ScreenPolicy and keeps the trace of every session it produced. */
-export function learnedScreenPolicy(policy: LinearPolicy, greedy = false): ScreenPolicy & { traces: Map<string, Trace> } {
+export function learnedScreenPolicy(policy: LinearPolicy, greedy = false, epsilon = 0): ScreenPolicy & { traces: Map<string, Trace> } {
   const traces = new Map<string, Trace>();
   const sp = ((user: SimUser, session: number, rng: Rng, history, rewards): UIDocument => {
     const state = stateFromHistory(history, rewards);
     const trace: Trace = { steps: [] };
     traces.set(`${user.id}:${session}`, trace);
-    return sample(newsfeed, policy.forState(state, rng, trace, greedy));
+    return sample(newsfeed, policy.forState(state, rng, trace, greedy, epsilon));
   }) as ScreenPolicy & { traces: Map<string, Trace> };
   sp.traces = traces;
   return sp;
 }
 
-export function train(opts: TrainOptions): { policy: LinearPolicy; history: number[] } {
+export interface TrainResult {
+  policy: LinearPolicy;
+  value: LinearValue;
+  history: number[];
+  /** Variance of the raw and baselined returns on the last batch, to see what the baseline bought. */
+  lastBatch: { returnVariance: number; advantageVariance: number };
+}
+
+export function train(opts: TrainOptions): TrainResult {
+  const gamma = opts.gamma ?? 1;
+  const mode = opts.baseline ?? 'value';
+  const epsilon = opts.epsilon ?? 0.1;
+  const standardize = opts.standardize ?? 'index';
+  const optimizer = opts.optimizer ?? 'adam';
   const policy = new LinearPolicy();
-  const baseline = new Float64Array(opts.maxSessions); // per session index
-  const baselineN = new Float64Array(opts.maxSessions);
+  const value = new LinearValue();
+  const indexBaseline = new Float64Array(opts.maxSessions);
+  const indexN = new Float64Array(opts.maxSessions);
   const history: number[] = [];
+  let lastBatch = { returnVariance: 0, advantageVariance: 0 };
 
   for (let it = 0; it < opts.iterations; it++) {
     const popSeed = opts.seed * 7919 + it;
     const users = makePopulation(opts.usersPerIteration, makeRng(popSeed));
-    const sp = learnedScreenPolicy(policy);
+    const sp = learnedScreenPolicy(policy, false, epsilon);
     const { trajectories, stats } = runEpisodes(sp, users, fakeData, opts.maxSessions, popSeed);
 
-    // Reward-to-go per session and advantages against the per-index baseline.
-    type Item = { key: string; adv: number };
+    // Discounted reward-to-go per session, then advantages against the baseline.
+    type Item = { key: string; togo: number; state: Float64Array; index: number };
     const items: Item[] = [];
     for (const t of trajectories) {
       const rewards = t.sessions.map((s) => sessionReward(s));
       let g = 0;
       const togo = new Array<number>(rewards.length);
-      for (let s = rewards.length - 1; s >= 0; s--) { g += rewards[s]; togo[s] = g; }
+      for (let s = rewards.length - 1; s >= 0; s--) { g = rewards[s] + gamma * g; togo[s] = g; }
       for (let s = 0; s < rewards.length; s++) {
-        items.push({ key: `${t.user}:${s}`, adv: togo[s] - baseline[s] });
-        // Update the baseline after use, as a running mean.
-        baselineN[s] += 1;
-        baseline[s] += (togo[s] - baseline[s]) / baselineN[s];
+        const key = `${t.user}:${s}`;
+        const trace = sp.traces.get(key);
+        if (!trace || trace.steps.length === 0) continue;
+        items.push({ key, togo: togo[s], state: trace.steps[0].rawState, index: s });
       }
     }
-    const mean = items.reduce((a, x) => a + x.adv, 0) / items.length;
-    const sd = Math.sqrt(items.reduce((a, x) => a + (x.adv - mean) ** 2, 0) / items.length) || 1;
+    let advantages: number[];
+    if (mode === 'value') {
+      value.fit(items.map((x) => x.state), items.map((x) => x.togo));
+      advantages = items.map((x) => x.togo - value.predict(x.state));
+    } else {
+      advantages = items.map((x) => x.togo - indexBaseline[x.index]);
+      for (const x of items) {
+        indexN[x.index] += 1;
+        indexBaseline[x.index] += (x.togo - indexBaseline[x.index]) / indexN[x.index];
+      }
+    }
+    const variance = (xs: number[]) => { const m = xs.reduce((a, b) => a + b, 0) / xs.length; return xs.reduce((a, b) => a + (b - m) ** 2, 0) / xs.length; };
+    lastBatch = { returnVariance: variance(items.map((x) => x.togo)), advantageVariance: variance(advantages) };
+    // Standardise. Session 0 is cold for everyone, so its returns carry the
+    // whole hidden-type variance; standardising per index keeps that from
+    // shrinking every later session's signal.
+    const groups = new Map<number, number[]>();
+    items.forEach((x, i) => { const k = standardize === 'index' ? x.index : 0; (groups.get(k) ?? groups.set(k, []).get(k)!).push(i); });
+    const scaled = new Array<number>(advantages.length);
+    for (const idx of groups.values()) {
+      const vals = idx.map((i) => advantages[i]);
+      const m = vals.reduce((a, b) => a + b, 0) / vals.length;
+      const sd = Math.sqrt(variance(vals)) || 1;
+      for (const i of idx) scaled[i] = (advantages[i] - m) / sd;
+    }
 
     const grads = new Map<string, Float64Array>();
-    for (const { key, adv } of items) {
-      const trace = sp.traces.get(key);
-      if (!trace) continue;
-      const a = (adv - mean) / sd;
-      for (const step of trace.steps) LinearPolicy.accumulate(grads, step, a);
-    }
-    policy.applyGradient(grads, opts.lr / users.length, opts.l2);
+    items.forEach(({ key }, i) => {
+      const trace = sp.traces.get(key)!;
+      for (const step of trace.steps) LinearPolicy.accumulate(grads, step, scaled[i]);
+    });
+    // Adam is scale-free, so it gets the mean gradient at lr; SGD keeps lr / users.
+    if (optimizer === 'adam') for (const g of grads.values()) for (let i = 0; i < g.length; i++) g[i] /= users.length;
+    policy.applyGradient(grads, optimizer === 'adam' ? opts.lr : opts.lr / users.length, opts.l2, optimizer);
+
+    // Normaliser statistics come from sessions with history (session 0 is all
+    // zeros). Updated after the step so the gradient was applied in the same
+    // coordinates that produced its samples; the update itself is logit-
+    // preserving, so it changes nothing the optimizer did not.
+    policy.updateNormalizer(items.filter((x) => x.index > 0).map((x) => x.state));
 
     history.push(stats.meanEpisodeReward);
     opts.onIteration?.(it, stats.meanEpisodeReward, policy);
   }
-  return { policy, history };
+  return { policy, value, history, lastBatch };
 }
 
 /** Frequency of some readable choices a policy makes for a population, at sessions >= `fromSession`. */

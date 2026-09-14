@@ -151,10 +151,12 @@ export class MlpPolicy implements PolicyModel {
     for (const [k, v] of this.heads) {
       let a = this.adamHeads.get(k);
       if (!a) { a = new AdamState(this.H + 1); this.adamHeads.set(k, a); }
-      // No decay on the head bias (last entry).
-      a.step(v, grads.heads.get(k) ?? zero, lr, l2, this.steps, optimizer, (i) => i < this.H);
-      const g = grads.heads.get(k);
-      if (g) a.step(v, g, lr, 0, this.steps, optimizer, (i) => i === this.H);
+      // No decay on the head bias (last entry). Both parts step every
+      // iteration, with a zero gradient when the key was absent from the
+      // batch, so the Adam moments never fall out of sync with the timestep.
+      const g = grads.heads.get(k) ?? zero;
+      a.step(v, g, lr, l2, this.steps, optimizer, (i) => i < this.H);
+      a.step(v, g, lr, 0, this.steps, optimizer, (i) => i === this.H);
     }
   }
 

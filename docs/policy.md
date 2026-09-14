@@ -135,15 +135,49 @@ up to 8 sessions (episode reward, comfortable minus compact):
 Opposite signs, and for browsers close to half their total reward. This
 diagnostic is what showed the learner, not the simulator, was the problem.
 
+## Per-decision credit by path: a negative result
+
+Every event names the node path it happened on, so a session's reward can
+be attributed back to the subtree that earned it (`attributeReward` in
+`reward.ts`: saturating terms are split across the events that formed
+them, the return bonus stays shared; the parts sum to the session reward
+exactly, checked). With `credit: 'path'` a decision is credited with the
+reward under paths related to its own (its subtree, or an ancestor) plus
+the shared session-level part, instead of sharing one advantage with the
+other ~30 decisions in the session. The local part is baselined by a
+running mean per decision key.
+
+It does not help. Same configuration, two seeds each, held-out:
+
+| credit | seed | greedy | sampled | gap |
+|---|---|---|---|---|
+| session | 1 | 59.3 | 54.5 | 63 |
+| session | 2 | 58.6 | 53.6 | 78 |
+| path | 1 | 60.8 | 54.3 | 71 |
+| path | 2 | 57.1 | 52.2 | 74 |
+
+Means: 59.0 vs 59.0 greedy, 54.0 vs 53.2 sampled, gap 70 vs 72. The gap
+moves by 15 points between seeds of the same configuration, so nothing
+here is distinguishable from noise. Learning speed (25 and 50 iterations)
+is a point faster on reward and slower on the gap. Session credit stays
+the default; the option and the attribution stay, because the attribution
+is the right primitive for reward reporting per node regardless.
+
+Why it likely does not help here: the decisions that matter most (density,
+section count, item variant) sit at or near the root, where path credit
+equals session credit anyway; leaf decisions inside a card mostly affect
+the same card-level events, so their local credit is shared among them
+just as the session advantage was. Sharper credit needs a model of what
+each decision changed, which is the world-model direction.
+
 ## Next steps
 
-1. Per-decision credit within a session: today all ~30 decisions in a
-   session share one advantage.
-2. Richer state: per-topic engagement, and what was shown before with what
+1. Richer state: per-topic engagement, and what was shown before with what
    result, so the policy can run its own small experiments on a user.
-3. A non-linear model once the linear one plateaus, which is where PyTorch
+2. A non-linear model once the linear one plateaus, which is where PyTorch
    enters via the grammar JSON export.
-4. Renderer instrumentation producing the same events for real sessions.
+3. Renderer instrumentation producing the same events for real sessions.
+4. Report seed variance with every number: the gap moves ±8 between seeds.
 
 ## Checks (`npm run check` runs `src/check-policy.ts`)
 

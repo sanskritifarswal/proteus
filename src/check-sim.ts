@@ -3,7 +3,7 @@ import { fakeData } from './fake-data.ts';
 import { nodePaths, type UIDocument, type UINode } from './tree.ts';
 import { makePopulation } from './sim/users.ts';
 import { fixedScreenPolicy, loadExample, randomScreenPolicy, runEpisodes } from './sim/episodes.ts';
-import { defaultWeights, sessionReward } from './reward.ts';
+import { attributeReward, defaultWeights, sessionReward } from './reward.ts';
 
 /**
  * Simulator sanity checks: deterministic per seed, every event names a real
@@ -133,6 +133,22 @@ function inflateCards(doc: UIDocument): UIDocument {
     }
   }
   report(footerActions > 0 && unseen === 0, `footer actions only on footers the user reached (${footerActions} actions, ${unseen} unseen)`);
+}
+
+// Reward attribution by path sums to the session reward exactly, and every
+// attributed path is a node in the tree.
+{
+  const { trajectories } = runEpisodes(randomScreenPolicy('local'), makePopulation(60, makeRng(12)), fakeData, 4, 12);
+  let maxErr = 0; let badPaths = 0; let sessions = 0;
+  for (const t of trajectories) for (const s of t.sessions) {
+    sessions++;
+    const { byPath, shared } = attributeReward(s);
+    const paths = nodePaths(s.tree);
+    let sum = shared;
+    for (const [p, v] of byPath) { sum += v; if (!paths.has(p)) badPaths++; }
+    maxErr = Math.max(maxErr, Math.abs(sum - sessionReward(s)));
+  }
+  report(maxErr < 1e-9 && badPaths === 0, `path attribution sums to the session reward (${sessions} sessions, max error ${maxErr.toExponential(1)}, ${badPaths} bad paths)`);
 }
 
 // Invalid reward weights are rejected instead of producing NaN.

@@ -43,4 +43,5 @@ npm run sample -- --seed 1 --n 3 --policy local   # print sampled UI documents
 npm run gallery -- --seed 1 --n 20               # render 20 samples to gallery/index.html
 npm run simulate -- --users 300 --sessions 10    # compare baseline policies on synthetic users; trajectories to out/
 npm run train                                    # train the linear policy, evaluate vs baselines on held-out users
+npm run twins                                    # does within-episode experimentation pay? full vs ablated state on the twins
 ```

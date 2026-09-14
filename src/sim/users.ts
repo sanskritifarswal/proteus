@@ -63,6 +63,20 @@ export const ARCHETYPES: Archetype[] = [
     base: { densityPref: 0.3, visualPref: 0.4, patience: 6, curiosity: -0.8, readDepth: 0.3, social: 0.15, returnBase: 0.4 },
     likes: ['Health', 'Food'], dislikes: [],
   },
+  // The twins: identical in every parameter except density preference, and
+  // visually neutral so nothing leaks through hero cards. Their engagement
+  // summaries look the same; only trying both densities tells them apart.
+  // Weight 0: not in the default mix, used for the experimentation test.
+  {
+    name: 'twin-compact', weight: 0,
+    base: { densityPref: -0.9, visualPref: 0, patience: 12, curiosity: -0.1, readDepth: 0.6, social: 0.3, returnBase: 0.7 },
+    likes: ['Local', 'Tech', 'Food'], dislikes: ['Sport'],
+  },
+  {
+    name: 'twin-comfortable', weight: 0,
+    base: { densityPref: 0.9, visualPref: 0, patience: 12, curiosity: -0.1, readDepth: 0.6, social: 0.3, returnBase: 0.7 },
+    likes: ['Local', 'Tech', 'Food'], dislikes: ['Sport'],
+  },
 ];
 
 function normal(rng: Rng): number {
@@ -96,8 +110,16 @@ export function makeUser(id: string, rng: Rng, archetype?: Archetype): SimUser {
   };
 }
 
-export function makePopulation(n: number, rng: Rng, archetype?: string): SimUser[] {
-  const a = archetype ? ARCHETYPES.find((x) => x.name === archetype) : undefined;
-  if (archetype && !a) throw new Error(`unknown archetype '${archetype}'`);
-  return Array.from({ length: n }, (_, i) => makeUser(`u${i}`, rng, a));
+/**
+ * A population. With no archetype, the default weighted mix. With one name,
+ * all that archetype. With several names, round-robin so the mix is exact.
+ */
+export function makePopulation(n: number, rng: Rng, archetype?: string | string[]): SimUser[] {
+  const names = archetype === undefined ? [] : Array.isArray(archetype) ? archetype : [archetype];
+  const chosen = names.map((name) => {
+    const a = ARCHETYPES.find((x) => x.name === name);
+    if (!a) throw new Error(`unknown archetype '${name}'`);
+    return a;
+  });
+  return Array.from({ length: n }, (_, i) => makeUser(`u${i}`, rng, chosen.length ? chosen[i % chosen.length] : undefined));
 }

@@ -224,15 +224,76 @@ summary, for example two archetypes with identical curiosity, read depth
 and topics but opposite density preferences. That is the next simulator
 change.
 
+## Does experimentation pay? The twins
+
+Two simulator archetypes, twin-compact and twin-comfortable, are identical
+in every parameter except density preference (docs/simulator.md). Their
+engagement summaries look the same, so the only way to tell them apart is
+to try both densities and read which one worked: the choice-evidence
+features. The prize is large. Flipping only `density` on a fixed layout,
+400 users per twin, 10 sessions:
+
+| layout | twin-compact, compact − comfortable | twin-comfortable |
+|---|---|---|
+| dense-list | +22.7 | −19.0 |
+| editorial-home | +17.0 | −14.4 |
+| visual-grid | +18.4 | −16.8 |
+
+About ±20 per episode, the largest single effect in the simulator.
+
+`npm run twins` trains on a twin-only population with the full state and
+with the four evidence features zeroed, two seeds each, and evaluates on
+held-out twins, sampled and greedy.
+
+Held-out twins, 150 iterations × 200 users, means over two seeds:
+
+| policy | reward | twin gap |
+|---|---|---|
+| random-local | 52.8 | −3 |
+| fixed-dense-list (compact) | 55.1 | 0 |
+| fixed-editorial-home (comfortable) | 38.7 | 0 |
+| learned, full state, sampled | 75.0 | 45 |
+| learned, full state, greedy | 79.8 | 56 |
+| learned, evidence features zeroed, sampled | 75.0 | 3 |
+| learned, evidence features zeroed, greedy | 79.3 | 4 |
+
+**The mechanism works.** With the evidence features the policy shows
+compact to twin-compact 56 points more often than to twin-comfortable;
+without them it cannot tell them apart at all. Nothing else in the state
+distinguishes the twins, so this is within-episode experimentation doing
+exactly what it was built to do.
+
+**The reward does not yet show it.** Full and ablated land within seed
+noise of each other. Forcing density on the trained (seed 1, greedy)
+policy says why:
+
+| density | twin-compact | twin-comfortable |
+|---|---|---|
+| forced to preferred | 83.6 | 81.9 |
+| as learned | 78.3 | 76.5 |
+| forced to opposite | 69.1 | 70.8 |
+
+Under the learned layout the density prize is about 13 per episode, so
+perfect discrimination is worth about 6 over a coin flip, and the policy
+captures roughly two thirds of that (a 56-point gap, not 100; evidence
+exists only from session 2). The ablated policy gets density right half
+the time and appears to spend the capacity on a better shared layout
+instead. The net difference, a few points, is inside the ±2.5 seed
+spread of this experiment. Resolving it needs more seeds and longer
+episodes (so more sessions carry evidence), and a sharper policy that
+turns a 56-point gap into a 90-point one.
+
+A check (`check-policy.ts`) guards the mechanism: after 40 iterations on
+twins the policy shows compact to twin-compact more than to
+twin-comfortable by over 20 points with the evidence features (24
+measured) and under 15 without (1 measured).
+
 ## Next steps
 
-1. Simulator: an archetype pair with identical engagement statistics and
-   opposite density preferences, to test whether within-episode
-   experimentation pays when it is the only way to tell users apart.
-2. A non-linear model once the linear one plateaus, which is where PyTorch
+1. A non-linear model once the linear one plateaus, which is where PyTorch
    enters via the grammar JSON export.
-3. Renderer instrumentation producing the same events for real sessions.
-4. Report seed variance with every number: the gap moves ±8 between seeds.
+2. Renderer instrumentation producing the same events for real sessions.
+3. Report seed variance with every number: the gap moves ±8 between seeds.
 
 ## Checks (`npm run check` runs `src/check-policy.ts`)
 

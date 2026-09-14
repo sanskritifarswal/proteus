@@ -12,7 +12,8 @@
     "gallery": "node src/gallery.ts",
     "simulate": "node src/sim/run.ts",
     "typecheck": "tsc --noEmit",
-    "train": "node src/policy/run.ts"
+    "train": "node src/policy/run.ts",
+    "twins": "node src/policy/experiment-twins.ts"
   },
   "devDependencies": {
     "@types/node": "^24.13.4",

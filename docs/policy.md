@@ -13,12 +13,26 @@ simulator or the reward.
 
 ## What it sees
 
-Only what a local, on-device scorer could see: a small vector summarising
-the user's own event history within the episode (`features.ts`): open
-rate, mean completion, dismiss rate, scroll-past rate, action rate, dwell,
-whether they returned last time, the density they were last shown, and
-the last session's reward. Session 0 is cold (bias only). Latent
-preferences are never available.
+Only what a local, on-device scorer could see: an 18-feature vector
+summarising the user's own event history within the episode
+(`features.ts`). Session 0 is cold (bias only). Latent preferences are
+never available.
+
+- **Engagement summary** (11): open rate, mean completion, dismiss rate,
+  scroll-past rate, action rate, dwell, opens in the last session, the
+  density last shown, the last session's reward.
+- **Choice evidence** (4): for each of compact density, compact items,
+  hero lead and buttons-per-card, the user's mean session reward when the
+  choice was on minus when it was off (0 until both have been tried). A
+  linear policy cannot multiply "what I showed" by "what happened", so the
+  product is handed to it directly; with the ε exploration floor it gets
+  both sides tried early in an episode. This is the policy running a small
+  experiment on each user.
+- **Sources** (1): open rate on the user's own feeds (following, saved,
+  continue reading) minus on general feeds.
+- **Topics** (2): share of opens in the most-opened topic, and number of
+  topics opened. Needs an article-to-topic lookup, which real
+  instrumentation would get from article metadata.
 
 ## How it chooses
 
@@ -172,10 +186,49 @@ the same card-level events, so their local credit is shared among them
 just as the session advantage was. Sharper credit needs a model of what
 each decision changed, which is the world-model direction.
 
+## Richer state: mechanism verified, outcome neutral
+
+The 18-feature state (above) replaced the 11-feature one. Same
+configuration, two seeds, held-out:
+
+| state | seed | greedy | sampled | gap |
+|---|---|---|---|---|
+| 11 features | 1 | 59.3 | 54.5 | 63 |
+| 11 features | 2 | 58.6 | 53.6 | 78 |
+| 18 features | 1 | 56.5 | 54.2 | 60 |
+| 18 features | 2 | 57.8 | 54.7 | 63 |
+
+Means 57.2 vs 59.0 greedy, 54.4 vs 54.0 sampled, gap 62 vs 70: neutral
+within seed noise. The value baseline explains more of the return with the
+new features (37% versus 30%), so they do predict outcomes.
+
+A probe of the trained weights shows the mechanism doing what it was built
+for: the density decision puts one of its largest weights (+0.87 on the
+normalised feature) on the compact-density evidence, with the right sign,
+so "compact worked for this user" pushes toward compact. Why it does not
+move the outcome here:
+
+- Evidence exists only once both sides of a choice have been tried. That
+  is 0% of users at sessions 0 and 1, 51% at session 2, 81% at session 3.
+  Most sessions in an episode are the early ones.
+- By the time evidence exists, mean completion alone has already
+  identified the archetype. In this simulator every preference is readable
+  from engagement statistics, so an experiment adds nothing a summary did
+  not already say.
+
+The features stay: the mechanism is the reason to run sequential
+decisions rather than a per-screen bandit, and it is now shown to be
+picked up by learning. To test whether it pays, the simulator needs users
+whose layout preference is *not* inferable from their engagement
+summary, for example two archetypes with identical curiosity, read depth
+and topics but opposite density preferences. That is the next simulator
+change.
+
 ## Next steps
 
-1. Richer state: per-topic engagement, and what was shown before with what
-   result, so the policy can run its own small experiments on a user.
+1. Simulator: an archetype pair with identical engagement statistics and
+   opposite density preferences, to test whether within-episode
+   experimentation pays when it is the only way to tell users apart.
 2. A non-linear model once the linear one plateaus, which is where PyTorch
    enters via the grammar JSON export.
 3. Renderer instrumentation producing the same events for real sessions.

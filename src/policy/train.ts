@@ -53,10 +53,14 @@ export interface TrainOptions {
 }
 
 /** Wraps a LinearPolicy as a ScreenPolicy and keeps the trace of every session it produced. */
+const topicByTitle = new Map<string, string>();
+for (const feed of Object.values(fakeData.feeds)) for (const a of feed.articles) topicByTitle.set(a.title, a.topic);
+const topicOf = (title: string) => topicByTitle.get(title);
+
 export function learnedScreenPolicy(policy: LinearPolicy, greedy = false, epsilon = 0): ScreenPolicy & { traces: Map<string, Trace> } {
   const traces = new Map<string, Trace>();
   const sp = ((user: SimUser, session: number, rng: Rng, history, rewards): UIDocument => {
-    const state = stateFromHistory(history, rewards);
+    const state = stateFromHistory(history, rewards, topicOf);
     const trace: Trace = { steps: [] };
     traces.set(`${user.id}:${session}`, trace);
     return sample(newsfeed, policy.forState(state, rng, trace, greedy, epsilon));

@@ -9,7 +9,9 @@ import { attributeReward, sessionReward } from '../reward.ts';
 import { makePopulation, type SimUser } from '../sim/users.ts';
 import { fixedScreenPolicy, loadExample, randomScreenPolicy, runEpisodes, type ScreenPolicy } from '../sim/episodes.ts';
 import { stateFromHistory } from './features.ts';
-import { LinearPolicy, type Trace } from './linear-policy.ts';
+import { LinearPolicy } from './linear-policy.ts';
+import { MlpPolicy } from './mlp-policy.ts';
+import type { PolicyModel, Trace } from './model.ts';
 import { LinearValue } from './value.ts';
 
 /**
@@ -52,8 +54,12 @@ export interface TrainOptions {
   archetypes?: string[];
   /** State feature indices zeroed before the policy sees them (ablations). */
   maskFeatures?: number[];
+  /** 'linear': one weight vector per option key. 'mlp': shared hidden layer plus a head per key. */
+  model?: 'linear' | 'mlp';
+  /** Hidden units for the MLP. */
+  hidden?: number;
   /** Called after each iteration with the mean episode reward on the training batch. */
-  onIteration?: (i: number, meanReward: number, policy: LinearPolicy) => void;
+  onIteration?: (i: number, meanReward: number, policy: PolicyModel) => void;
 }
 
 /** Wraps a LinearPolicy as a ScreenPolicy and keeps the trace of every session it produced. */
@@ -61,7 +67,7 @@ const topicByTitle = new Map<string, string>();
 for (const feed of Object.values(fakeData.feeds)) for (const a of feed.articles) topicByTitle.set(a.title, a.topic);
 const topicOf = (title: string) => topicByTitle.get(title);
 
-export function learnedScreenPolicy(policy: LinearPolicy, greedy = false, epsilon = 0, maskFeatures: number[] = []): ScreenPolicy & { traces: Map<string, Trace> } {
+export function learnedScreenPolicy(policy: PolicyModel, greedy = false, epsilon = 0, maskFeatures: number[] = []): ScreenPolicy & { traces: Map<string, Trace> } {
   const traces = new Map<string, Trace>();
   const sp = ((user: SimUser, session: number, rng: Rng, history, rewards): UIDocument => {
     const state = stateFromHistory(history, rewards, topicOf);
@@ -81,7 +87,7 @@ export function related(decisionPath: string, eventPath: string): boolean {
 }
 
 export interface TrainResult {
-  policy: LinearPolicy;
+  policy: PolicyModel;
   value: LinearValue;
   history: number[];
   /** Variance of the raw and baselined returns on the last batch, to see what the baseline bought. */
@@ -96,7 +102,7 @@ export function train(opts: TrainOptions): TrainResult {
   const optimizer = opts.optimizer ?? 'adam';
   const credit = opts.credit ?? 'session';
   const localBaseline = new Map<string, { mean: number; n: number }>();
-  const policy = new LinearPolicy();
+  const policy: PolicyModel = (opts.model ?? 'linear') === 'mlp' ? new MlpPolicy(opts.hidden ?? 32, makeRng(opts.seed * 31 + 7)) : new LinearPolicy();
   const value = new LinearValue();
   const indexBaseline = new Float64Array(opts.maxSessions);
   const indexN = new Float64Array(opts.maxSessions);
@@ -171,7 +177,7 @@ export function train(opts: TrainOptions): TrainResult {
     // then divided by the same spread that standardised this item's
     // session-level advantage (its own group's), so the two parts are
     // commensurate at every session index.
-    const grads = new Map<string, Float64Array>();
+    const grads = policy.newGrads();
     items.forEach(({ key, local }, i) => {
       const trace = sp.traces.get(key)!;
       trace.steps.forEach((step, j) => {
@@ -182,11 +188,11 @@ export function train(opts: TrainOptions): TrainResult {
           a += (local[j] - b.mean) / groupSd[i];
           b.n += 1; b.mean += (local[j] - b.mean) / b.n; localBaseline.set(k, b);
         }
-        LinearPolicy.accumulate(grads, step, a);
+        policy.accumulate(grads, step, a);
       });
     });
     // Adam is scale-free, so it gets the mean gradient at lr; SGD keeps lr / users.
-    if (optimizer === 'adam') for (const g of grads.values()) for (let i = 0; i < g.length; i++) g[i] /= users.length;
+    if (optimizer === 'adam') policy.scaleGrads(grads, users.length);
     policy.applyGradient(grads, optimizer === 'adam' ? opts.lr : opts.lr / users.length, opts.l2, optimizer);
 
     // Normaliser statistics come from sessions with history (session 0 is all

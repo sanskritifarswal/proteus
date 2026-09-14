@@ -288,12 +288,71 @@ twins the policy shows compact to twin-compact more than to
 twin-comfortable by over 20 points with the evidence features (24
 measured) and under 15 without (1 measured).
 
+## The non-linear policy
+
+`mlp-policy.ts`: a hidden layer shared across every decision and one
+small linear head per option key.
+
+    h = tanh(W1 · z + b1)          shared, 32 units
+    logit_k = v_k · h + c_k        per option key
+
+The shared layer can form combinations a linear policy cannot ("compact
+worked for this user *and* completion is high"); the per-key heads keep
+the factored structure of the action space. Heads start at zero, so the
+untrained network is exactly uniform, the same as the linear policy. The
+normaliser update is logit-preserving here too, because the input
+transform is affine. Backpropagation is written out by hand; the sizes are
+tiny (about 4,000 parameters). Both models implement one `PolicyModel`
+interface (`model.ts`), so the trainer, the evaluation and the checks do
+not care which they are driving. `npm run train -- --model mlp`.
+
+Why in TypeScript rather than PyTorch: the question at this point is
+whether non-linearity helps, and a two-layer network in 150 lines answers
+it without an inter-process bridge to a simulator that lives in
+TypeScript. The grammar JSON export remains the path for a PyTorch version
+once the model needs to be bigger than this.
+
+### Result: not better, and less stable
+
+Mixed population, held-out, same configuration as the linear runs (Adam
+lr 0.02 unless noted):
+
+| model | seed | greedy | sampled | gap |
+|---|---|---|---|---|
+| linear | 1 | 56.5 | 54.2 | 60 |
+| linear | 2 | 57.8 | 54.7 | 63 |
+| mlp, 32 hidden | 1 | 58.4 | 54.5 | 63 |
+| mlp, 32 hidden | 2 | 51.9 | 55.1 | **1** |
+| mlp, 32 hidden, lr 0.01 | 2 | 52.6 | 52.1 | 68 |
+
+Seed 1 matches the linear model. Seed 2 at lr 0.02 collapsed to compact
+for every archetype (98%) and its greedy policy scores below its own
+sampled one, a mode collapse the linear model never showed. Halving the
+learning rate restores the conditioning (gap 68) but costs six points of
+reward. Either way the MLP is not ahead.
+
+On the twins (`npm run twins -- --model mlp`, two seeds) the MLP's gap is
+**0** in every configuration, full state or evidence-ablated, sampled or
+greedy, at rewards between 76 and 80, the same level as the linear model.
+The linear model reached a 45–56 point gap here. So the first non-linear
+policy does not merely fail to improve; it loses the within-episode
+experimentation the linear model had.
+
+Why, most likely: the shared hidden layer receives gradient from all ~30
+decisions in a session at once, so the noisy session-level advantage
+moves every decision's representation together, and the per-key heads
+sitting on a shifting representation drift toward whichever global mode
+was rewarded most recently. The linear model's per-key weights are
+independent and cannot do that. Fixes worth trying later: entropy
+regularisation, gradient clipping, a lower learning rate on the shared
+layer than on the heads, and larger batches. None was tried here, so this
+is "the first non-linear policy did not help", not "non-linearity does
+not help". The linear model stays the default.
+
 ## Next steps
 
-1. A non-linear model once the linear one plateaus, which is where PyTorch
-   enters via the grammar JSON export.
-2. Renderer instrumentation producing the same events for real sessions.
-3. Report seed variance with every number: the gap moves ±8 between seeds.
+1. Renderer instrumentation producing the same events for real sessions.
+2. Report seed variance with every number: the gap moves ±8 between seeds.
 
 ## Checks (`npm run check` runs `src/check-policy.ts`)
 

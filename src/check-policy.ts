@@ -61,6 +61,26 @@ report(trained > untrained * 1.05, `25 iterations improve held-out reward by >5%
   report(points > 10, `learned policy conditions density on the user (compact for power readers ${(power * 100).toFixed(0)}%, browsers ${(browser * 100).toFixed(0)}%, gap ${points.toFixed(0)} points, need > 10)`);
 }
 
+// The MLP: untrained equals uniform (heads start at zero), a normaliser
+// update preserves every probability, and short training improves.
+{
+  const mlp0 = train({ ...opts, iterations: 0, model: 'mlp' }).policy;
+  const u = runEpisodes(learnedScreenPolicy(mlp0), evalPop(), fakeData, 6, 4242).stats.meanEpisodeReward;
+  report(Math.abs(u - uniform) < 1e-9, `untrained MLP equals per-decision uniform random (${u.toFixed(2)} vs ${uniform.toFixed(2)})`);
+  const m = train({ ...opts, model: 'mlp' }).policy;
+  const sp = learnedScreenPolicy(m);
+  runEpisodes(sp, makePopulation(30, makeRng(98)), fakeData, 4, 98);
+  const steps = [...sp.traces.values()].flatMap((t) => t.steps).filter((st) => st.rawState[1] > 0).slice(0, 200);
+  const dec = { kind: 'props' as const, path: '', component: 'Screen', context: 'screen', options: ['{"density":"compact"}', '{"density":"comfortable"}'], weights: [1n, 1n] };
+  const before = steps.map((st) => [...m.probs(dec, st.rawState).probs]);
+  m.updateNormalizer(steps.map((st) => st.rawState), 0.7);
+  const after = steps.map((st) => [...m.probs(dec, st.rawState).probs]);
+  const maxDiff = Math.max(...before.map((b, i) => Math.max(...b.map((x, j) => Math.abs(x - after[i][j])))));
+  report(maxDiff < 1e-9, `MLP normaliser update preserves every decision probability (max change ${maxDiff.toExponential(1)})`);
+  const t = runEpisodes(learnedScreenPolicy(m), evalPop(), fakeData, 6, 4242).stats.meanEpisodeReward;
+  report(t > untrained * 1.05, `25 iterations improve the MLP's held-out reward by >5% (${untrained.toFixed(2)} -> ${t.toFixed(2)})`);
+}
+
 // Within-episode experimentation: on the twins (identical engagement
 // statistics, opposite density preferences) only the choice-evidence
 // features can tell users apart. With them the policy shows compact to

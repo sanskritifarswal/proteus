@@ -153,15 +153,17 @@ It does not help. Same configuration, two seeds each, held-out:
 |---|---|---|---|---|
 | session | 1 | 59.3 | 54.5 | 63 |
 | session | 2 | 58.6 | 53.6 | 78 |
-| path | 1 | 60.8 | 54.3 | 71 |
-| path | 2 | 57.1 | 52.2 | 74 |
+| path | 1 | 56.4 | 53.7 | 72 |
+| path | 2 | 59.4 | 57.8 | 83 |
 
-Means: 59.0 vs 59.0 greedy, 54.0 vs 53.2 sampled, gap 70 vs 72. The gap
+Means: 59.0 vs 57.9 greedy, 54.0 vs 55.7 sampled, gap 70 vs 78. The gap
 moves by 15 points between seeds of the same configuration, so nothing
 here is distinguishable from noise. Learning speed (25 and 50 iterations)
 is a point faster on reward and slower on the gap. Session credit stays
 the default; the option and the attribution stay, because the attribution
-is the right primitive for reward reporting per node regardless.
+is the right primitive for reward reporting per node regardless. (The
+local term is divided by the same per-index spread as the session term,
+so the two parts are commensurate at every session index.)
 
 Why it likely does not help here: the decisions that matter most (density,
 section count, item variant) sit at or near the root, where path credit

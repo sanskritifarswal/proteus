@@ -150,17 +150,18 @@ export function train(opts: TrainOptions): TrainResult {
     const groups = new Map<number, number[]>();
     items.forEach((x, i) => { const k = standardize === 'index' ? x.index : 0; (groups.get(k) ?? groups.set(k, []).get(k)!).push(i); });
     const scaled = new Array<number>(advantages.length);
+    const groupSd = new Array<number>(advantages.length);
     for (const idx of groups.values()) {
       const vals = idx.map((i) => advantages[i]);
       const m = vals.reduce((a, b) => a + b, 0) / vals.length;
       const sd = Math.sqrt(variance(vals)) || 1;
-      for (const i of idx) scaled[i] = (advantages[i] - m) / sd;
+      for (const i of idx) { scaled[i] = (advantages[i] - m) / sd; groupSd[i] = sd; }
     }
 
     // Local (path) advantages: baselined by a running mean per decision key,
-    // then scaled by the same spread as the session-level advantages so the
-    // two parts are commensurate.
-    const sessionSd = Math.sqrt(variance(advantages)) || 1;
+    // then divided by the same spread that standardised this item's
+    // session-level advantage (its own group's), so the two parts are
+    // commensurate at every session index.
     const grads = new Map<string, Float64Array>();
     items.forEach(({ key, local }, i) => {
       const trace = sp.traces.get(key)!;
@@ -169,7 +170,7 @@ export function train(opts: TrainOptions): TrainResult {
         if (credit === 'path') {
           const k = step.keys[step.chosen].split('|').slice(0, 3).join('|');
           const b = localBaseline.get(k) ?? { mean: 0, n: 0 };
-          a += (local[j] - b.mean) / sessionSd;
+          a += (local[j] - b.mean) / groupSd[i];
           b.n += 1; b.mean += (local[j] - b.mean) / b.n; localBaseline.set(k, b);
         }
         LinearPolicy.accumulate(grads, step, a);

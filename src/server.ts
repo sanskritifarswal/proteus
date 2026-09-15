@@ -47,22 +47,37 @@ const topicOf = (t: string) => topicByTitle.get(t);
 export class SessionStore {
   private readonly current = new Map<string, ExportedRecord>();
   private readonly logFile: string;
+  /** Log lines that could not be loaded, with reasons. */
+  readonly skipped: string[] = [];
 
   constructor(dir: string) {
     mkdirSync(dir, { recursive: true });
     this.logFile = join(dir, 'events.jsonl');
     if (existsSync(this.logFile)) {
-      for (const line of readFileSync(this.logFile, 'utf8').split('\n')) {
-        if (!line) continue;
-        this.absorb(JSON.parse(line) as ExportedRecord);
-      }
+      const lines = readFileSync(this.logFile, 'utf8').split('\n');
+      lines.forEach((line, i) => {
+        if (!line) return;
+        // An interrupted append can leave a partial trailing line. Skip
+        // what cannot be parsed or validated rather than refusing to start.
+        let rec: unknown;
+        try { rec = JSON.parse(line); } catch { this.skipped.push(`line ${i + 1}: not JSON`); return; }
+        const errors = validateRecord(rec);
+        if (errors.length) { this.skipped.push(`line ${i + 1}: ${errors[0]}`); return; }
+        this.absorb(rec as ExportedRecord);
+      });
+      if (this.skipped.length) console.error(`store: skipped ${this.skipped.length} unreadable log line(s): ${this.skipped.join('; ')}`);
     }
   }
 
+  /** More events wins; at equal length, the later session end wins (a final after a quiet snapshot). */
   private absorb(rec: ExportedRecord): boolean {
     const k = `${rec.user}:${rec.session}`;
     const have = this.current.get(k);
-    if (have && have.events.length >= rec.events.length) return false;
+    if (have) {
+      const lastT = (r: ExportedRecord) => (r.events.length ? r.events[r.events.length - 1].t : -1);
+      if (have.events.length > rec.events.length) return false;
+      if (have.events.length === rec.events.length && lastT(have) >= lastT(rec)) return false;
+    }
     this.current.set(k, rec);
     return true;
   }
@@ -171,10 +186,15 @@ if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
   const args = process.argv.slice(2);
   const opt = (name: string, dflt: string) => { const i = args.indexOf(`--${name}`); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : dflt; };
   const port = Number(opt('port', '8787'));
+  // Loopback unless remote access is deliberately requested: there is no
+  // authentication, so anything that can reach the port can read every
+  // session and replace any user's current one.
+  const host = opt('host', '127.0.0.1');
   const store = opt('store', 'out/server');
   const policyName = opt('policy', 'trained');
   const policyFile = opt('policy-file', 'out/policy.json');
-  if (!Number.isInteger(port) || port < 1 || port > 65535) { console.error('usage: node src/server.ts [--port <int>] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json]'); process.exit(2); }
+  if (!Number.isInteger(port) || port < 1 || port > 65535 || !host) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json]'); process.exit(2); }
+  if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') console.error(`warning: binding to ${host} exposes an unauthenticated server beyond this machine`);
   let policy: ServerOptions['policy'];
   if (policyName === 'trained') {
     if (!existsSync(policyFile)) { console.error(`no trained policy at ${policyFile}; run npm run train first, or pass --policy random|<example>`); process.exit(1); }
@@ -185,5 +205,5 @@ if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
     if (!existsSync(f)) { console.error(`unknown policy '${policyName}'`); process.exit(2); }
     policy = JSON.parse(readFileSync(f, 'utf8')) as UIDocument;
   }
-  createServer({ store, policy }).listen(port, () => console.log(`proteus serving on http://localhost:${port} (store ${store}, policy ${policyName})`));
+  createServer({ store, policy }).listen(port, host, () => console.log(`proteus serving on http://${host}:${port} (store ${store}, policy ${policyName})`));
 }

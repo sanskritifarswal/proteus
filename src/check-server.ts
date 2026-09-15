@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -66,6 +66,27 @@ await withServer(async (base) => {
 // Restart on the same store: the session is still there.
 const reloaded = new SessionStore(dir);
 report(reloaded.sessions('alice').length === 1 && reloaded.records().length === 1, 'the store reloads deduplicated sessions from its log');
+
+// Equal-length records: a final that ends later than a quiet snapshot replaces it.
+{
+  let clock = 0;
+  const r = createRecorder({ user: 'bob', session: 0, grammar: 'newsfeed@0.3.0', tree: JSON.parse(readFileSync('examples/valid/dense-list.json', 'utf8')).tree, now: () => clock });
+  r.impression('sections[0].content.item', 'A');
+  const snap = r.snapshot();
+  clock += 5000; r.end();
+  const fin = r.record();
+  const s2 = new SessionStore(dir);
+  const a = s2.put(snap).replaced; const b = s2.put(fin).replaced; const c = s2.put(snap).replaced;
+  const kept = s2.records('bob')[0];
+  report(a && b && !c && kept.events[kept.events.length - 1].t === 5000, 'at equal length the later session end wins and the earlier snapshot cannot undo it');
+}
+
+// A truncated trailing log line does not block restart.
+{
+  appendFileSync(join(dir, 'events.jsonl'), '{"user":"carol","session":0,"grammar":"newsfeed@0.3.0","tree":{"type":"Screen"},"eve');
+  const s3 = new SessionStore(dir);
+  report(s3.skipped.length === 1 && s3.records().length === 2 && s3.sessions('alice').length === 1, `a partial trailing log line is skipped with a reason (${s3.skipped[0]})`);
+}
 
 rmSync(dir, { recursive: true, force: true });
 console.log(failures ? `\n${failures} server check(s) failed` : '\nserver checks passed');

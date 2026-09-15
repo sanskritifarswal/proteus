@@ -78,6 +78,20 @@ report(store.traceCount() >= clients.sessions, `every served screen left a trace
 const r = trainReal({ store: dir, policy, epochs: 6, lr: 0.02 });
 report(r.skippedNoTrace === 1 && r.skippedGreedy === 1 && r.usable === clients.sessions + 1, `train-real used ${r.usable} sessions; skipped ${r.skippedNoTrace} with no matching trace and ${r.skippedGreedy} served greedily`);
 
+// Growth bound: one address cannot introduce unlimited new user ids, and
+// invented ids never consume a slot of the posted-user cap.
+{
+  const postedBefore = new SessionStore(dir).postedUsers();
+  const quota = createServer({ store: dir, policy, epsilon: 0.15, maxNewUsersPerAddressPerHour: 2 });
+  await new Promise<void>((r) => quota.listen(0, '127.0.0.1', r));
+  const b = `http://127.0.0.1:${(quota.address() as AddressInfo).port}`;
+  const known = (await fetch(`${b}/u/${store.users()[0]}`)).status; // a user who has posted: unaffected
+  const fresh = [(await fetch(`${b}/u/fresh-1`)).status, (await fetch(`${b}/u/fresh-2`)).status, (await fetch(`${b}/u/fresh-3`)).status];
+  await new Promise<void>((r) => quota.close(() => r()));
+  const postedAfter = new SessionStore(dir).postedUsers();
+  report(known === 200 && fresh.join(',') === '200,200,429' && postedAfter === postedBefore, `new user ids are rate-limited per address, known users are not, and trace-only ids consume no posted-user slot (known ${known}; fresh ${fresh.join(',')}; posted ${postedBefore} -> ${postedAfter})`);
+}
+
 // Growth bound: a session cannot be served more than maxServesPerSession times before it is posted.
 {
   const capped = createServer({ store: dir, policy, epsilon: 0.15, maxServesPerSession: 3 });

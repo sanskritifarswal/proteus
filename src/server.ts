@@ -46,9 +46,19 @@ export interface ServerOptions {
    * the trace of every served screen is recorded alongside it.
    */
   epsilon?: number;
-  /** Bounds on what an unauthenticated caller can make the store grow by. */
+  /**
+   * Bounds on what an unauthenticated caller can make the store grow by.
+   * maxServesPerSession: screens served for one (user, session) before it
+   * is posted. maxUsers: users who have posted at least one session (a
+   * trace-only id does not consume a slot, so invented ids cannot exhaust
+   * it). maxNewUsersPerAddressPerHour: first-time user ids one remote
+   * address may introduce in a sliding hour, which is what bounds trace
+   * growth from invented ids. None of this is authentication; exposure
+   * beyond loopback still needs some.
+   */
   maxServesPerSession?: number;
   maxUsers?: number;
+  maxNewUsersPerAddressPerHour?: number;
 }
 
 /** Identity of a served tree, so a posted record can be matched to the trace of the screen it came from. */
@@ -153,8 +163,14 @@ export class SessionStore {
   trace(user: string, session: number, hash: string): StoredTrace | undefined { return this.traceMap.get(`${user}:${session}:${hash}`); }
   traceCount(): number { return this.traceMap.size; }
   servesFor(user: string, session: number): number { return this.serves.get(`${user}:${session}`) ?? 0; }
-  /** Users with any record or trace. */
-  knownUsers(): number { return new Set([...this.current.values()].map((r) => r.user).concat([...this.traceMap.values()].map((t) => t.user))).size; }
+  /** Users who have posted at least one session. */
+  postedUsers(): number { return new Set([...this.current.values()].map((r) => r.user)).size; }
+  /** Has this user ever been served or posted? */
+  known(user: string): boolean {
+    for (const r of this.current.values()) if (r.user === user) return true;
+    for (const t of this.traceMap.values()) if (t.user === user) return true;
+    return false;
+  }
 }
 
 function serialiseTrace(user: string, session: number, tree: unknown, trace: Trace, decisions: Decision[]): StoredTrace {
@@ -205,6 +221,16 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 export function createServer(opts: ServerOptions): Server {
   const store = new SessionStore(opts.store);
   const max = opts.maxBodyBytes ?? 1_000_000;
+  // First-time user ids introduced per remote address, sliding hour.
+  const newUsersByAddress = new Map<string, number[]>();
+  const allowNewUser = (address: string): boolean => {
+    const now = Date.now();
+    const times = (newUsersByAddress.get(address) ?? []).filter((t) => now - t < 3_600_000);
+    if (times.length >= (opts.maxNewUsersPerAddressPerHour ?? 1000)) { newUsersByAddress.set(address, times); return false; }
+    times.push(now);
+    newUsersByAddress.set(address, times);
+    return true;
+  };
   const send = (res: ServerResponse, status: number, body: string, type = 'application/json') => {
     res.writeHead(status, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-store' });
     res.end(body);
@@ -238,7 +264,10 @@ export function createServer(opts: ServerOptions): Server {
         const history = store.sessions(user);
         const sessionIdx = history.length ? history[history.length - 1].session + 1 : 0;
         if (store.servesFor(user, sessionIdx) >= (opts.maxServesPerSession ?? 20)) return send(res, 429, JSON.stringify({ ok: false, errors: ['too many screens served for this session; post the session first'] }));
-        if (store.servesFor(user, sessionIdx) === 0 && store.knownUsers() >= (opts.maxUsers ?? 10_000)) return send(res, 429, JSON.stringify({ ok: false, errors: ['user limit reached'] }));
+        if (!store.known(user)) {
+          if (store.postedUsers() >= (opts.maxUsers ?? 10_000)) return send(res, 429, JSON.stringify({ ok: false, errors: ['user limit reached'] }));
+          if (!allowNewUser(req.socket.remoteAddress ?? 'unknown')) return send(res, 429, JSON.stringify({ ok: false, errors: ['too many new users from this address; try later'] }));
+        }
         const { doc, session, trace } = nextScreen(store, user, opts.policy, opts.epsilon ?? 0);
         if (trace) store.putTrace(trace);
         return send(res, 200, renderPage(doc, fakeData, { user, session, endpoint: '/events' }), 'text/html');

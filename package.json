@@ -6,7 +6,7 @@
   "description": "Generative UI framework: typed component grammars, model-assembled layouts.",
   "scripts": {
     "schema": "node src/build-schema.ts && node src/export-grammar.ts",
-    "check": "tsc --noEmit && node src/validate.ts && node src/check-sampler.ts && node src/check-sim.ts && node src/check-policy.ts && node src/check-client.ts && node src/check-server.ts",
+    "check": "tsc --noEmit && node src/validate.ts && node src/check-sampler.ts && node src/check-sim.ts && node src/check-policy.ts && node src/check-client.ts && node src/check-server.ts && node src/check-real.ts",
     "count": "node src/count-space.ts",
     "sample": "node src/sample-cli.ts",
     "gallery": "node src/gallery.ts",
@@ -16,7 +16,10 @@
     "twins": "node src/policy/experiment-twins.ts",
     "demo": "node src/demo.ts",
     "collect": "node src/collect.ts",
-    "serve": "node src/server.ts"
+    "serve": "node src/server.ts",
+    "train-real": "node src/real/train-real.ts",
+    "compare": "node src/real/compare.ts",
+    "clients": "node src/real/synthetic-clients.ts"
   },
   "devDependencies": {
     "@types/node": "^24.13.4",

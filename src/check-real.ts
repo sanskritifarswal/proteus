@@ -93,6 +93,20 @@ report(r.skippedNoTrace === 1 && r.skippedGreedy === 1 && r.usable === clients.s
   report(known === 200 && fresh.join(',') === '200,200,429' && postedAfter === postedBefore, `new user ids are rate-limited per address, known users are not, and trace-only ids consume no posted-user slot (known ${known}; fresh ${fresh.join(',')}; posted ${postedBefore} -> ${postedAfter})`);
 }
 
+// The posted-user cap holds on posting too: a served-but-unposted user cannot push the count over it.
+{
+  const posted = new SessionStore(dir).postedUsers();
+  const full = createServer({ store: dir, policy, epsilon: 0.15, maxUsers: posted, seed: 16 });
+  await new Promise<void>((r) => full.listen(0, '127.0.0.1', r));
+  const b = `http://127.0.0.1:${(full.address() as AddressInfo).port}`;
+  const tree = new SessionStore(dir).sessions(store.users()[0])[0].tree;
+  const mk = (user: string) => { const r = createRecorder({ user, session: 0, grammar: 'newsfeed@0.3.0', tree, now: () => 0 }); r.impression('sections[0].content.item', 'A'); r.end(); return r.record(); };
+  const newcomer = (await fetch(`${b}/events`, { method: 'POST', body: JSON.stringify(mk('late-arrival')) })).status;
+  const existing = (await fetch(`${b}/events`, { method: 'POST', body: JSON.stringify({ ...mk(store.users()[0]), session: 99 }) })).status;
+  await new Promise<void>((r) => full.close(() => r()));
+  report(newcomer === 429 && existing === 200 && new SessionStore(dir).postedUsers() === posted, `posting cannot exceed the posted-user cap (newcomer ${newcomer}, existing user ${existing}, posted ${posted} -> ${new SessionStore(dir).postedUsers()})`);
+}
+
 // Growth bound: a session cannot be served more than maxServesPerSession times before it is posted.
 {
   const capped = createServer({ store: dir, policy, epsilon: 0.15, maxServesPerSession: 3, seed: 15 });

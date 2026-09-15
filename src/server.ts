@@ -172,6 +172,7 @@ export class SessionStore {
   servesFor(user: string, session: number): number { return this.serves.get(`${user}:${session}`) ?? 0; }
   /** Users who have posted at least one session. */
   postedUsers(): number { return new Set([...this.current.values()].map((r) => r.user)).size; }
+  hasPosted(user: string): boolean { for (const r of this.current.values()) if (r.user === user) return true; return false; }
   /** Has this user ever been served or posted? */
   known(user: string): boolean {
     for (const r of this.current.values()) if (r.user === user) return true;
@@ -252,6 +253,13 @@ export function createServer(opts: ServerOptions): Server {
       if (req.method === 'POST' && url.pathname === '/events') {
         let rec: unknown;
         try { rec = JSON.parse(await readBody(req, max)); } catch (e) { return send(res, 400, JSON.stringify({ ok: false, errors: [(e as Error).message] })); }
+        // The posted-user cap is enforced here as well as on serving: a user
+        // served while capacity remained must not push the count over the cap
+        // by posting after others have filled it.
+        const user = (rec as { user?: unknown })?.user;
+        if (typeof user === 'string' && !store.hasPosted(user) && store.postedUsers() >= (opts.maxUsers ?? 10_000)) {
+          return send(res, 429, JSON.stringify({ ok: false, errors: ['user limit reached'] }));
+        }
         const { errors, replaced } = store.put(rec);
         if (errors.length) return send(res, 400, JSON.stringify({ ok: false, errors }));
         return send(res, 200, JSON.stringify({ ok: true, replaced }));

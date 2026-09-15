@@ -23,9 +23,13 @@ Greedy serving (`--epsilon 0`) records a trace too, but sessions served
 greedily carry no unbiased gradient and `train-real` skips them.
 
 Serving is bounded: at most 20 screens per (user, session) before it is
-posted, and at most 10,000 users, so a caller cannot grow the store
-without limit. Exploration seeds come from the OS random source, so two
-users in the same state never share an exploration sequence.
+posted; at most 10,000 users who have posted a session (a trace-only id
+does not consume a slot, so invented ids cannot exhaust it); and at most
+1,000 first-time user ids per remote address per sliding hour, which is
+what bounds trace growth from invented ids. None of this is
+authentication: the server binds to loopback by default, and exposing it
+further needs some. Exploration seeds come from the OS random source, so
+two users in the same state never share an exploration sequence.
 
 ## `npm run train-real`
 
@@ -74,7 +78,7 @@ users for up to 4 sessions each:
 - Serving a session more than the bound returns 429 until it is posted.
 - Importance weights start at 1.000; the surrogate objective rises across
   6 epochs.
-- Held-out simulated reward rises from 31.06 to 33.68 (+8%) from the
+- Held-out simulated reward rises from 31.06 to 32.70 (+5%) from the
   stored sessions alone, with no simulator in the training loop.
 - `compare` produces finite z-scores.
 

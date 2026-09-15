@@ -30,7 +30,8 @@ const evalPop = () => makePopulation(300, makeRng(4242));
 const evaluate = () => runEpisodes(learnedScreenPolicy(policy), evalPop(), fakeData, 6, 4242).stats.meanEpisodeReward;
 const before = evaluate();
 
-const server = createServer({ store: dir, policy, epsilon: 0.15 });
+// Seeded, so the run (and so the improvement it asserts) is repeatable.
+const server = createServer({ store: dir, policy, epsilon: 0.15, seed: 11 });
 await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 const clients = await runSyntheticClients({ base, users: 150, sessions: 4, seed: 7 });
@@ -49,7 +50,7 @@ report(store.traceCount() >= clients.sessions, `every served screen left a trace
 }
 // A greedily served session (ε = 0): skipped.
 {
-  const greedy = createServer({ store: dir, policy, epsilon: 0 });
+  const greedy = createServer({ store: dir, policy, epsilon: 0, seed: 12 });
   await new Promise<void>((r) => greedy.listen(0, '127.0.0.1', r));
   const b = `http://127.0.0.1:${(greedy.address() as AddressInfo).port}`;
   const html = await (await fetch(`${b}/u/greedy-user`)).text();
@@ -61,7 +62,7 @@ report(store.traceCount() >= clients.sessions, `every served screen left a trace
 }
 // Two loads before posting: the posted tree matches its own trace, not the last one served.
 {
-  const two = createServer({ store: dir, policy, epsilon: 0.15 });
+  const two = createServer({ store: dir, policy, epsilon: 0.15, seed: 13 });
   await new Promise<void>((r) => two.listen(0, '127.0.0.1', r));
   const b = `http://127.0.0.1:${(two.address() as AddressInfo).port}`;
   const grab = async () => JSON.parse(/<script type="application\/json" id="proteus-tree">(.*?)<\/script>/s.exec(await (await fetch(`${b}/u/reloader`)).text())![1].replace(/\\u003c/g, '<'));
@@ -78,9 +79,38 @@ report(store.traceCount() >= clients.sessions, `every served screen left a trace
 const r = trainReal({ store: dir, policy, epochs: 6, lr: 0.02 });
 report(r.skippedNoTrace === 1 && r.skippedGreedy === 1 && r.usable === clients.sessions + 1, `train-real used ${r.usable} sessions; skipped ${r.skippedNoTrace} with no matching trace and ${r.skippedGreedy} served greedily`);
 
+// Growth bound: one address cannot introduce unlimited new user ids, and
+// invented ids never consume a slot of the posted-user cap.
+{
+  const postedBefore = new SessionStore(dir).postedUsers();
+  const quota = createServer({ store: dir, policy, epsilon: 0.15, maxNewUsersPerAddressPerHour: 2, seed: 14 });
+  await new Promise<void>((r) => quota.listen(0, '127.0.0.1', r));
+  const b = `http://127.0.0.1:${(quota.address() as AddressInfo).port}`;
+  const known = (await fetch(`${b}/u/${store.users()[0]}`)).status; // a user who has posted: unaffected
+  const fresh = [(await fetch(`${b}/u/fresh-1`)).status, (await fetch(`${b}/u/fresh-2`)).status, (await fetch(`${b}/u/fresh-3`)).status];
+  await new Promise<void>((r) => quota.close(() => r()));
+  const postedAfter = new SessionStore(dir).postedUsers();
+  report(known === 200 && fresh.join(',') === '200,200,429' && postedAfter === postedBefore, `new user ids are rate-limited per address, known users are not, and trace-only ids consume no posted-user slot (known ${known}; fresh ${fresh.join(',')}; posted ${postedBefore} -> ${postedAfter})`);
+}
+
+// The posted-user cap holds on posting too: a served-but-unposted user cannot push the count over it.
+{
+  const posted = new SessionStore(dir).postedUsers();
+  const full = createServer({ store: dir, policy, epsilon: 0.15, maxUsers: posted, seed: 16 });
+  await new Promise<void>((r) => full.listen(0, '127.0.0.1', r));
+  const b = `http://127.0.0.1:${(full.address() as AddressInfo).port}`;
+  const tree = new SessionStore(dir).sessions(store.users()[0])[0].tree;
+  const mk = (user: string) => { const r = createRecorder({ user, session: 0, grammar: 'newsfeed@0.3.0', tree, now: () => 0 }); r.impression('sections[0].content.item', 'A'); r.end(); return r.record(); };
+  const newcomer = (await fetch(`${b}/events`, { method: 'POST', body: JSON.stringify(mk('late-arrival')) })).status;
+  const malformed = (await fetch(`${b}/events`, { method: 'POST', body: JSON.stringify({ user: 'late-arrival-2' }) })).status;
+  const existing = (await fetch(`${b}/events`, { method: 'POST', body: JSON.stringify({ ...mk(store.users()[0]), session: 99 }) })).status;
+  await new Promise<void>((r) => full.close(() => r()));
+  report(newcomer === 429 && existing === 200 && malformed === 400 && new SessionStore(dir).postedUsers() === posted, `posting cannot exceed the posted-user cap, and a malformed record at the cap is still a 400 (newcomer ${newcomer}, existing ${existing}, malformed ${malformed}, posted ${posted} -> ${new SessionStore(dir).postedUsers()})`);
+}
+
 // Growth bound: a session cannot be served more than maxServesPerSession times before it is posted.
 {
-  const capped = createServer({ store: dir, policy, epsilon: 0.15, maxServesPerSession: 3 });
+  const capped = createServer({ store: dir, policy, epsilon: 0.15, maxServesPerSession: 3, seed: 15 });
   await new Promise<void>((r) => capped.listen(0, '127.0.0.1', r));
   const b = `http://127.0.0.1:${(capped.address() as AddressInfo).port}`;
   const statuses: number[] = [];

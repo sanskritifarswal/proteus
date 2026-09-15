@@ -46,9 +46,26 @@ export interface ServerOptions {
    * the trace of every served screen is recorded alongside it.
    */
   epsilon?: number;
-  /** Bounds on what an unauthenticated caller can make the store grow by. */
+  /**
+   * Bounds on what an unauthenticated caller can make the store grow by.
+   * maxServesPerSession: screens served for one (user, session) before it
+   * is posted. maxUsers: users who have posted at least one session (a
+   * trace-only id does not consume a slot, so invented ids cannot exhaust
+   * it). maxNewUsersPerAddressPerHour: first-time user ids one remote
+   * address may introduce in a sliding hour, which is what bounds trace
+   * growth from invented ids. None of this is authentication; exposure
+   * beyond loopback still needs some.
+   */
   maxServesPerSession?: number;
   maxUsers?: number;
+  maxNewUsersPerAddressPerHour?: number;
+  /**
+   * Exploration seed. Unset (production): every serve draws from the OS
+   * random source, so exploration is never correlated across users or
+   * predictable. Set (tests): serves are seeded from this number and a
+   * per-server counter, so a run is repeatable.
+   */
+  seed?: number;
 }
 
 /** Identity of a served tree, so a posted record can be matched to the trace of the screen it came from. */
@@ -153,8 +170,15 @@ export class SessionStore {
   trace(user: string, session: number, hash: string): StoredTrace | undefined { return this.traceMap.get(`${user}:${session}:${hash}`); }
   traceCount(): number { return this.traceMap.size; }
   servesFor(user: string, session: number): number { return this.serves.get(`${user}:${session}`) ?? 0; }
-  /** Users with any record or trace. */
-  knownUsers(): number { return new Set([...this.current.values()].map((r) => r.user).concat([...this.traceMap.values()].map((t) => t.user))).size; }
+  /** Users who have posted at least one session. */
+  postedUsers(): number { return new Set([...this.current.values()].map((r) => r.user)).size; }
+  hasPosted(user: string): boolean { for (const r of this.current.values()) if (r.user === user) return true; return false; }
+  /** Has this user ever been served or posted? */
+  known(user: string): boolean {
+    for (const r of this.current.values()) if (r.user === user) return true;
+    for (const t of this.traceMap.values()) if (t.user === user) return true;
+    return false;
+  }
 }
 
 function serialiseTrace(user: string, session: number, tree: unknown, trace: Trace, decisions: Decision[]): StoredTrace {
@@ -172,16 +196,17 @@ export function loadPolicyFile(file: string): PolicyModel {
   return json.model === 'mlp' ? MlpPolicy.fromJSON(json) : LinearPolicy.fromJSON(json);
 }
 
-export function nextScreen(store: SessionStore, user: string, policy: ServerOptions['policy'], epsilon = 0): { doc: UIDocument; session: number; how: string; trace?: StoredTrace } {
+export function nextScreen(store: SessionStore, user: string, policy: ServerOptions['policy'], epsilon = 0, seed?: number): { doc: UIDocument; session: number; how: string; trace?: StoredTrace } {
   const history = store.sessions(user);
   const rewards = history.map((s) => sessionReward(s));
   const session = history.length ? history[history.length - 1].session + 1 : 0;
   if (policy === 'random') return { doc: sample(newsfeed, localUniform(makeRng(session * 7919 + user.length))), session, how: 'random' };
   if ('grammar' in policy) return { doc: policy, session, how: 'fixed' };
   const state = stateFromHistory(history, rewards, topicOf);
-  // A fresh, unpredictable seed per serve: exploration must not be
-  // correlated across users, and the trace records what was sampled anyway.
-  const rng = makeRng(randomInt(0, 2 ** 31));
+  // A fresh, unpredictable seed per serve unless a seed was given: exploration
+  // must not be correlated across users, and the trace records what was
+  // sampled anyway.
+  const rng = makeRng(seed ?? randomInt(0, 2 ** 31));
   const trace: Trace = { steps: [] };
   const decisions: Decision[] = [];
   const inner = policy.forState(state, rng, trace, epsilon === 0, epsilon);
@@ -205,6 +230,18 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 export function createServer(opts: ServerOptions): Server {
   const store = new SessionStore(opts.store);
   const max = opts.maxBodyBytes ?? 1_000_000;
+  let serveCounter = 0;
+  const serveSeed = (): number | undefined => (opts.seed === undefined ? undefined : (opts.seed * 1_000_003 + serveCounter++) >>> 0);
+  // First-time user ids introduced per remote address, sliding hour.
+  const newUsersByAddress = new Map<string, number[]>();
+  const allowNewUser = (address: string): boolean => {
+    const now = Date.now();
+    const times = (newUsersByAddress.get(address) ?? []).filter((t) => now - t < 3_600_000);
+    if (times.length >= (opts.maxNewUsersPerAddressPerHour ?? 1000)) { newUsersByAddress.set(address, times); return false; }
+    times.push(now);
+    newUsersByAddress.set(address, times);
+    return true;
+  };
   const send = (res: ServerResponse, status: number, body: string, type = 'application/json') => {
     res.writeHead(status, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-store' });
     res.end(body);
@@ -216,6 +253,17 @@ export function createServer(opts: ServerOptions): Server {
       if (req.method === 'POST' && url.pathname === '/events') {
         let rec: unknown;
         try { rec = JSON.parse(await readBody(req, max)); } catch (e) { return send(res, 400, JSON.stringify({ ok: false, errors: [(e as Error).message] })); }
+        // Validation first, so a malformed record is a 400 the client must
+        // fix, never a 429 it would retry. Then the posted-user cap, enforced
+        // here as well as on serving: a user served while capacity remained
+        // must not push the count over the cap by posting after others
+        // filled it.
+        const invalid = validateRecord(rec);
+        if (invalid.length) return send(res, 400, JSON.stringify({ ok: false, errors: invalid }));
+        const user = (rec as { user: string }).user;
+        if (!store.hasPosted(user) && store.postedUsers() >= (opts.maxUsers ?? 10_000)) {
+          return send(res, 429, JSON.stringify({ ok: false, errors: ['user limit reached'] }));
+        }
         const { errors, replaced } = store.put(rec);
         if (errors.length) return send(res, 400, JSON.stringify({ ok: false, errors }));
         return send(res, 200, JSON.stringify({ ok: true, replaced }));
@@ -238,8 +286,11 @@ export function createServer(opts: ServerOptions): Server {
         const history = store.sessions(user);
         const sessionIdx = history.length ? history[history.length - 1].session + 1 : 0;
         if (store.servesFor(user, sessionIdx) >= (opts.maxServesPerSession ?? 20)) return send(res, 429, JSON.stringify({ ok: false, errors: ['too many screens served for this session; post the session first'] }));
-        if (store.servesFor(user, sessionIdx) === 0 && store.knownUsers() >= (opts.maxUsers ?? 10_000)) return send(res, 429, JSON.stringify({ ok: false, errors: ['user limit reached'] }));
-        const { doc, session, trace } = nextScreen(store, user, opts.policy, opts.epsilon ?? 0);
+        if (!store.known(user)) {
+          if (store.postedUsers() >= (opts.maxUsers ?? 10_000)) return send(res, 429, JSON.stringify({ ok: false, errors: ['user limit reached'] }));
+          if (!allowNewUser(req.socket.remoteAddress ?? 'unknown')) return send(res, 429, JSON.stringify({ ok: false, errors: ['too many new users from this address; try later'] }));
+        }
+        const { doc, session, trace } = nextScreen(store, user, opts.policy, opts.epsilon ?? 0, serveSeed());
         if (trace) store.putTrace(trace);
         return send(res, 200, renderPage(doc, fakeData, { user, session, endpoint: '/events' }), 'text/html');
       }

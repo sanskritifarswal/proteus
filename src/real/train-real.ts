@@ -4,7 +4,7 @@ import { sessionReward } from '../reward.ts';
 import { LinearPolicy } from '../policy/linear-policy.ts';
 import { LinearValue } from '../policy/value.ts';
 import type { Step } from '../policy/model.ts';
-import { loadPolicyFile, SessionStore } from '../server.ts';
+import { loadPolicyFile, SessionStore, treeHash } from '../server.ts';
 
 /**
  * Policy-gradient updates from real sessions.
@@ -19,8 +19,11 @@ import { loadPolicyFile, SessionStore } from '../server.ts';
  * π_now(choice) / p_served(choice), clipped, since the policy may have moved
  * since the screen was served. Several Adam epochs over the batch.
  *
- * Sessions served greedily or without a trace are skipped and counted:
- * with no sampling probabilities there is no unbiased gradient.
+ * Sessions are skipped and counted when they have no trace for the tree
+ * they were shown (the user may have loaded the screen more than once
+ * before posting; only the trace of the posted tree is valid), or when the
+ * screen was served greedily (ε = 0): with no sampling probabilities there
+ * is no unbiased gradient.
  *
  * Linear policy only in this version: the MLP needs its hidden activations
  * recomputed per step, which is a small addition when it is wanted.
@@ -39,7 +42,10 @@ export interface TrainRealReport {
   users: number;
   sessions: number;
   usable: number;
+  /** No trace for the (user, session, tree) that was posted. */
   skippedNoTrace: number;
+  /** Served with ε = 0: deterministic behaviour probabilities, not trainable. */
+  skippedGreedy: number;
   meanReward: number;
   /**
    * Per epoch: mean importance weight, and the surrogate objective, the
@@ -60,7 +66,7 @@ export function trainReal(opts: TrainRealOptions): TrainRealReport {
 
   type Item = { togo: number; rawState: Float64Array; steps: NonNullable<ReturnType<SessionStore['trace']>>['steps']; index: number };
   const items: Item[] = [];
-  let sessions = 0, usable = 0, skippedNoTrace = 0, rewardSum = 0;
+  let sessions = 0, usable = 0, skippedNoTrace = 0, skippedGreedy = 0, rewardSum = 0;
   const users = store.users();
   for (const user of users) {
     const list = store.sessions(user);
@@ -71,13 +77,14 @@ export function trainReal(opts: TrainRealOptions): TrainRealReport {
     list.forEach((s, i) => {
       sessions++;
       rewardSum += rewards[i];
-      const trace = store.trace(user, s.session);
+      const trace = store.trace(user, s.session, treeHash(s.tree));
       if (!trace || trace.steps.length === 0) { skippedNoTrace++; return; }
+      if (trace.steps.every((st) => st.epsilon === 0)) { skippedGreedy++; return; }
       usable++;
       items.push({ togo: togo[i], rawState: Float64Array.from(trace.steps[0].rawState), steps: trace.steps, index: i });
     });
   }
-  const report: TrainRealReport = { users: users.length, sessions, usable, skippedNoTrace, meanReward: sessions ? rewardSum / sessions : 0, epochs: [] };
+  const report: TrainRealReport = { users: users.length, sessions, usable, skippedNoTrace, skippedGreedy, meanReward: sessions ? rewardSum / sessions : 0, epochs: [] };
   if (items.length === 0) return report;
 
   const value = new LinearValue();
@@ -122,7 +129,7 @@ if (process.argv[1] && process.argv[1].endsWith('train-real.ts')) {
   const loaded = loadPolicyFile(policyFile);
   if (!(loaded instanceof LinearPolicy)) { console.error('train-real supports the linear policy in this version'); process.exit(1); }
   const report = trainReal({ store, policy: loaded, epochs, lr });
-  console.log(`${report.users} users, ${report.sessions} sessions, ${report.usable} with traces (${report.skippedNoTrace} skipped: no trace), mean reward ${report.meanReward.toFixed(2)}`);
+  console.log(`${report.users} users, ${report.sessions} sessions, ${report.usable} usable (${report.skippedNoTrace} skipped: no matching trace; ${report.skippedGreedy} skipped: served greedily), mean reward ${report.meanReward.toFixed(2)}`);
   report.epochs.forEach((e, i) => console.log(`  epoch ${i + 1}: mean importance weight ${e.meanWeight.toFixed(3)}, surrogate ${e.surrogate.toFixed(4)}`));
   if (report.usable === 0) { console.error('nothing to train on: serve with --epsilon > 0 so traces are recorded'); process.exit(1); }
   writeFileSync(out, JSON.stringify(loaded.toJSON()));

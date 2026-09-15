@@ -15,9 +15,17 @@ from. `npm run serve` now serves the learned policy with exploration
 (`--epsilon`, default 0.1: sample from (1−ε)·policy + ε·uniform) and
 records the decision trace of every served screen (the options offered,
 the sampling probabilities, the choice, the state) to `traces.jsonl` in
-the store, keyed by (user, session). Greedy serving (`--epsilon 0`)
-records a trace too, but sessions served greedily carry no unbiased
-gradient and `train-real` skips them.
+the store, keyed by (user, session, hash of the served tree). A user may
+load a session's screen more than once before posting; each load is a
+different tree with its own trace, and a posted record is matched to the
+trace of the tree it actually carries, never to the last one served.
+Greedy serving (`--epsilon 0`) records a trace too, but sessions served
+greedily carry no unbiased gradient and `train-real` skips them.
+
+Serving is bounded: at most 20 screens per (user, session) before it is
+posted, and at most 10,000 users, so a caller cannot grow the store
+without limit. Exploration seeds come from the OS random source, so two
+users in the same state never share an exploration sequence.
 
 ## `npm run train-real`
 
@@ -27,10 +35,12 @@ exists, censored on the last), fits a linear value baseline on the real
 states, and takes Adam epochs of importance-weighted policy gradient
 from the current policy: each decision's log-probability gradient under
 the *current* policy, scaled by its advantage and by
-π_now(choice) / p_served(choice), clipped at 5. Writes the updated policy
-to `out/policy-real.json`. Reports the mean importance weight (near 1
-when the policy has not moved far from what was served) and the
-surrogate objective per epoch (must rise). Linear policy only for now.
+π_now(choice) / p_served(choice), clipped at 5. Sessions with no trace
+for their tree, and sessions served greedily, are skipped and counted.
+Writes the updated policy to `out/policy-real.json`. Reports the mean
+importance weight (near 1 when the policy has not moved far from what was
+served) and the surrogate objective per epoch (must rise). Linear policy
+only for now.
 
 ## `npm run clients`
 
@@ -44,7 +54,10 @@ nothing about the sim-to-real gap; that needs people.
 The gap, measured. For each real session, the same tree is simulated for
 a synthetic population (default 200 users) and the real user's per-session
 metrics (opens, completion, scroll-past, actions, dwell, reward) are placed
-against that distribution as z-scores. A metric whose |z| is routinely
+against that distribution as z-scores. A returning user's session is
+compared against simulated users carrying that user's own history: the
+articles opened in earlier real sessions are already seen, and the
+session index matches. A metric whose |z| is routinely
 large is one the simulator gets wrong for real people, and where
 calibration effort should go.
 
@@ -53,11 +66,15 @@ calibration effort should go.
 With an untrained (uniform) policy served at ε 0.15 to 150 synthetic
 users for up to 4 sessions each:
 
-- 374 sessions posted, 0 rejected, 374 traces recorded.
-- A session without a trace is skipped and counted, not trained on.
+- 371 sessions posted, 0 rejected, 371 traces recorded.
+- Two loads of one session before posting keep two traces; the posted
+  tree matches its own by hash.
+- A session with no matching trace, and a session served greedily, are
+  skipped and counted, not trained on.
+- Serving a session more than the bound returns 429 until it is posted.
 - Importance weights start at 1.000; the surrogate objective rises across
-  6 epochs (−0.0168 → −0.0091).
-- Held-out simulated reward rises from 31.06 to 34.62 (+11%) from the
+  6 epochs.
+- Held-out simulated reward rises from 31.06 to 33.68 (+8%) from the
   stored sessions alone, with no simulator in the training loop.
 - `compare` produces finite z-scores.
 

@@ -1,4 +1,5 @@
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
+import { createHash, randomInt } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { UIDocument } from './tree.ts';
@@ -45,12 +46,22 @@ export interface ServerOptions {
    * the trace of every served screen is recorded alongside it.
    */
   epsilon?: number;
+  /** Bounds on what an unauthenticated caller can make the store grow by. */
+  maxServesPerSession?: number;
+  maxUsers?: number;
+}
+
+/** Identity of a served tree, so a posted record can be matched to the trace of the screen it came from. */
+export function treeHash(tree: unknown): string {
+  return createHash('sha256').update(JSON.stringify(tree)).digest('hex').slice(0, 16);
 }
 
 /** A served screen's decision trace, serialised for the store. */
 export interface StoredTrace {
   user: string;
   session: number;
+  /** Hash of the served tree. A user may load a session's screen more than once before posting; each load is a different tree and its own trace. */
+  treeHash: string;
   steps: Array<{
     decision: Pick<Decision, 'kind' | 'path' | 'component' | 'context' | 'options'>;
     keys: string[];
@@ -69,6 +80,8 @@ const topicOf = (t: string) => topicByTitle.get(t);
 export class SessionStore {
   private readonly current = new Map<string, ExportedRecord>();
   private readonly traceMap = new Map<string, StoredTrace>();
+  /** Screens served per (user, session), for the growth bound. */
+  private readonly serves = new Map<string, number>();
   private readonly logFile: string;
   private readonly traceFile: string;
   /** Log lines that could not be loaded, with reasons. */
@@ -81,7 +94,7 @@ export class SessionStore {
     if (existsSync(this.traceFile)) {
       readFileSync(this.traceFile, 'utf8').split('\n').forEach((line, i) => {
         if (!line) return;
-        try { const t = JSON.parse(line) as StoredTrace; this.traceMap.set(`${t.user}:${t.session}`, t); } catch { this.skipped.push(`traces line ${i + 1}: not JSON`); }
+        try { const t = JSON.parse(line) as StoredTrace; this.traceMap.set(`${t.user}:${t.session}:${t.treeHash}`, t); this.serves.set(`${t.user}:${t.session}`, (this.serves.get(`${t.user}:${t.session}`) ?? 0) + 1); } catch { this.skipped.push(`traces line ${i + 1}: not JSON`); }
       });
     }
     if (existsSync(this.logFile)) {
@@ -129,19 +142,24 @@ export class SessionStore {
 
   sessions(user: string): SessionRecord[] { return assemble(this.records(user)).get(user) ?? []; }
 
-  /** Record the decision trace of a served screen (last one served for a session wins). */
+  /** Record the decision trace of a served screen, keyed by the tree it served. */
   putTrace(t: StoredTrace): void {
     appendFileSync(this.traceFile, JSON.stringify(t) + '\n');
-    this.traceMap.set(`${t.user}:${t.session}`, t);
+    this.traceMap.set(`${t.user}:${t.session}:${t.treeHash}`, t);
+    this.serves.set(`${t.user}:${t.session}`, (this.serves.get(`${t.user}:${t.session}`) ?? 0) + 1);
   }
 
-  trace(user: string, session: number): StoredTrace | undefined { return this.traceMap.get(`${user}:${session}`); }
+  /** The trace of the screen a record came from: same user, session and tree. */
+  trace(user: string, session: number, hash: string): StoredTrace | undefined { return this.traceMap.get(`${user}:${session}:${hash}`); }
   traceCount(): number { return this.traceMap.size; }
+  servesFor(user: string, session: number): number { return this.serves.get(`${user}:${session}`) ?? 0; }
+  /** Users with any record or trace. */
+  knownUsers(): number { return new Set([...this.current.values()].map((r) => r.user).concat([...this.traceMap.values()].map((t) => t.user))).size; }
 }
 
-function serialiseTrace(user: string, session: number, trace: Trace, decisions: Decision[]): StoredTrace {
+function serialiseTrace(user: string, session: number, tree: unknown, trace: Trace, decisions: Decision[]): StoredTrace {
   return {
-    user, session,
+    user, session, treeHash: treeHash(tree),
     steps: trace.steps.map((st: Step, i) => ({
       decision: { kind: decisions[i].kind, path: decisions[i].path, component: decisions[i].component, context: decisions[i].context, options: decisions[i].options },
       keys: st.keys, probs: [...st.probs], sampled: [...st.sampled], epsilon: st.epsilon, chosen: st.chosen, rawState: [...st.rawState],
@@ -161,14 +179,15 @@ export function nextScreen(store: SessionStore, user: string, policy: ServerOpti
   if (policy === 'random') return { doc: sample(newsfeed, localUniform(makeRng(session * 7919 + user.length))), session, how: 'random' };
   if ('grammar' in policy) return { doc: policy, session, how: 'fixed' };
   const state = stateFromHistory(history, rewards, topicOf);
-  // A fresh seed per serve, so two users at the same state do not get the same exploration.
-  const rng = makeRng((Date.now() ^ (session * 7919) ^ user.length) >>> 0);
+  // A fresh, unpredictable seed per serve: exploration must not be
+  // correlated across users, and the trace records what was sampled anyway.
+  const rng = makeRng(randomInt(0, 2 ** 31));
   const trace: Trace = { steps: [] };
   const decisions: Decision[] = [];
   const inner = policy.forState(state, rng, trace, epsilon === 0, epsilon);
   const recording: Policy = (d) => { decisions.push(d); return inner(d); };
   const doc = sample(newsfeed, recording);
-  return { doc, session, how: `${policy.name} policy${epsilon > 0 ? ` (ε ${epsilon})` : ' (greedy)'}, ${history.length} prior session(s)`, trace: serialiseTrace(user, session, trace, decisions) };
+  return { doc, session, how: `${policy.name} policy${epsilon > 0 ? ` (ε ${epsilon})` : ' (greedy)'}, ${history.length} prior session(s)`, trace: serialiseTrace(user, session, doc.tree, trace, decisions) };
 }
 
 function readBody(req: IncomingMessage, max: number): Promise<string> {
@@ -214,6 +233,12 @@ export function createServer(opts: ServerOptions): Server {
       const m = /^\/(u|sessions)\/([A-Za-z0-9_.-]{1,64})$/.exec(url.pathname);
       if (m && m[1] === 'u') {
         const user = m[2];
+        // Growth bounds: a caller cannot make the store grow without limit
+        // by reloading, or by inventing users.
+        const history = store.sessions(user);
+        const sessionIdx = history.length ? history[history.length - 1].session + 1 : 0;
+        if (store.servesFor(user, sessionIdx) >= (opts.maxServesPerSession ?? 20)) return send(res, 429, JSON.stringify({ ok: false, errors: ['too many screens served for this session; post the session first'] }));
+        if (store.servesFor(user, sessionIdx) === 0 && store.knownUsers() >= (opts.maxUsers ?? 10_000)) return send(res, 429, JSON.stringify({ ok: false, errors: ['user limit reached'] }));
         const { doc, session, trace } = nextScreen(store, user, opts.policy, opts.epsilon ?? 0);
         if (trace) store.putTrace(trace);
         return send(res, 200, renderPage(doc, fakeData, { user, session, endpoint: '/events' }), 'text/html');

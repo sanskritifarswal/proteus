@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { createServer, SessionStore } from './server.ts';
+import { createServer, SessionStore, treeHash } from './server.ts';
 import { LinearPolicy } from './policy/linear-policy.ts';
 import { learnedScreenPolicy } from './policy/train.ts';
 import { runEpisodes } from './sim/episodes.ts';
@@ -40,15 +40,54 @@ report(clients.rejected === 0 && clients.sessions >= 150, `synthetic clients pos
 const store = new SessionStore(dir);
 report(store.traceCount() >= clients.sessions, `every served screen left a trace (${store.traceCount()} traces, ${clients.sessions} sessions)`);
 
-// A session with no trace (served elsewhere): must be skipped, not trained on.
+// A session whose tree has no trace (served elsewhere, or a different load
+// than the one posted): skipped, not trained on.
 {
   const rec = createRecorder({ user: 'stranger', session: 0, grammar: 'newsfeed@0.3.0', tree: store.sessions(store.users()[0])[0].tree, now: () => 0 });
   rec.end();
   store.put(rec.record());
 }
+// A greedily served session (ε = 0): skipped.
+{
+  const greedy = createServer({ store: dir, policy, epsilon: 0 });
+  await new Promise<void>((r) => greedy.listen(0, '127.0.0.1', r));
+  const b = `http://127.0.0.1:${(greedy.address() as AddressInfo).port}`;
+  const html = await (await fetch(`${b}/u/greedy-user`)).text();
+  const tree = JSON.parse(/<script type="application\/json" id="proteus-tree">(.*?)<\/script>/s.exec(html)![1].replace(/\\u003c/g, '<'));
+  const rec = createRecorder({ user: 'greedy-user', session: 0, grammar: 'newsfeed@0.3.0', tree, now: () => 0 });
+  rec.end();
+  await fetch(`${b}/events`, { method: 'POST', body: JSON.stringify(rec.record()) });
+  await new Promise<void>((r) => greedy.close(() => r()));
+}
+// Two loads before posting: the posted tree matches its own trace, not the last one served.
+{
+  const two = createServer({ store: dir, policy, epsilon: 0.15 });
+  await new Promise<void>((r) => two.listen(0, '127.0.0.1', r));
+  const b = `http://127.0.0.1:${(two.address() as AddressInfo).port}`;
+  const grab = async () => JSON.parse(/<script type="application\/json" id="proteus-tree">(.*?)<\/script>/s.exec(await (await fetch(`${b}/u/reloader`)).text())![1].replace(/\\u003c/g, '<'));
+  const first = await grab();
+  const second = await grab();
+  const rec = createRecorder({ user: 'reloader', session: 0, grammar: 'newsfeed@0.3.0', tree: first, now: () => 0 });
+  rec.impression('sections[0].content.item', 'A'); rec.end();
+  await fetch(`${b}/events`, { method: 'POST', body: JSON.stringify(rec.record()) });
+  await new Promise<void>((r) => two.close(() => r()));
+  const s2 = new SessionStore(dir);
+  report(treeHash(first) !== treeHash(second) && !!s2.trace('reloader', 0, treeHash(first)) && !!s2.trace('reloader', 0, treeHash(second)), 'each load of a session keeps its own trace, matched to the posted tree by hash');
+}
 
 const r = trainReal({ store: dir, policy, epochs: 6, lr: 0.02 });
-report(r.skippedNoTrace === 1 && r.usable === clients.sessions, `train-real used ${r.usable} traced sessions and skipped ${r.skippedNoTrace} without a trace`);
+report(r.skippedNoTrace === 1 && r.skippedGreedy === 1 && r.usable === clients.sessions + 1, `train-real used ${r.usable} sessions; skipped ${r.skippedNoTrace} with no matching trace and ${r.skippedGreedy} served greedily`);
+
+// Growth bound: a session cannot be served more than maxServesPerSession times before it is posted.
+{
+  const capped = createServer({ store: dir, policy, epsilon: 0.15, maxServesPerSession: 3 });
+  await new Promise<void>((r) => capped.listen(0, '127.0.0.1', r));
+  const b = `http://127.0.0.1:${(capped.address() as AddressInfo).port}`;
+  const statuses: number[] = [];
+  for (let i = 0; i < 5; i++) statuses.push((await fetch(`${b}/u/flooder`)).status);
+  await new Promise<void>((r) => capped.close(() => r()));
+  report(statuses.join(',') === '200,200,200,429,429', `serving is bounded per session before it is posted (${statuses.join(',')})`);
+}
 report(r.epochs[0].meanWeight > 0.9 && r.epochs[0].meanWeight < 1.1, `importance weights start near 1 (${r.epochs[0].meanWeight.toFixed(3)})`);
 report(r.epochs[r.epochs.length - 1].surrogate > r.epochs[0].surrogate + 1e-6, `the surrogate objective rises across epochs (${r.epochs[0].surrogate.toFixed(4)} -> ${r.epochs[r.epochs.length - 1].surrogate.toFixed(4)})`);
 const after = evaluate();

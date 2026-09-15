@@ -43,20 +43,34 @@ export interface Comparison {
   z: Record<Metric, number>;
 }
 
+/**
+ * A returning user's session is compared against simulated users who carry
+ * that user's own history: the articles they opened in earlier real
+ * sessions are already "seen" (the simulator opens seen articles less), and
+ * the session index matches. Records are grouped by user and ordered.
+ */
 export function compareSessions(records: SessionRecord[], usersPerTree = 200, seed = 1): { perSession: Comparison[]; meanAbsZ: Record<Metric, number>; meanZ: Record<Metric, number> } {
+  if (!Number.isInteger(usersPerTree) || usersPerTree < 2) throw new Error(`usersPerTree must be an integer >= 2 (got ${usersPerTree})`);
   const perSession: Comparison[] = [];
-  for (const rec of records) {
-    const pop = makePopulation(usersPerTree, makeRng(seed));
-    const sims = pop.map((u, i) => metricsOf(simulateSession(u, rec.tree, fakeData, rec.grammar, 0, { seen: new Set(), sessionsSoFar: 0 }, makeRng(seed * 1000 + i))));
-    const real = metricsOf(rec);
-    const simMean = {} as Record<Metric, number>, simSd = {} as Record<Metric, number>, z = {} as Record<Metric, number>;
-    for (const m of METRICS) {
-      const xs = sims.map((s) => s[m]);
-      const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
-      const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length);
-      simMean[m] = mean; simSd[m] = sd; z[m] = sd > 0 ? (real[m] - mean) / sd : 0;
-    }
-    perSession.push({ user: rec.user, session: rec.session, real, simMean, simSd, z });
+  const byUser = new Map<string, SessionRecord[]>();
+  for (const r of records) (byUser.get(r.user) ?? byUser.set(r.user, []).get(r.user)!).push(r);
+  for (const list of byUser.values()) {
+    list.sort((a, b) => a.session - b.session);
+    const seen = new Set<string>();
+    list.forEach((rec, idx) => {
+      const pop = makePopulation(usersPerTree, makeRng(seed));
+      const sims = pop.map((u, i) => metricsOf(simulateSession(u, rec.tree, fakeData, rec.grammar, rec.session, { seen: new Set(seen), sessionsSoFar: idx }, makeRng(seed * 1000 + i))));
+      const real = metricsOf(rec);
+      const simMean = {} as Record<Metric, number>, simSd = {} as Record<Metric, number>, z = {} as Record<Metric, number>;
+      for (const m of METRICS) {
+        const xs = sims.map((s) => s[m]);
+        const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+        const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length);
+        simMean[m] = mean; simSd[m] = sd; z[m] = sd > 0 ? (real[m] - mean) / sd : 0;
+      }
+      perSession.push({ user: rec.user, session: rec.session, real, simMean, simSd, z });
+      for (const e of rec.events) if (e.type === 'open') seen.add(e.article);
+    });
   }
   const meanAbsZ = {} as Record<Metric, number>, meanZ = {} as Record<Metric, number>;
   for (const m of METRICS) {
@@ -70,6 +84,7 @@ if (process.argv[1] && process.argv[1].endsWith('compare.ts')) {
   const args = process.argv.slice(2);
   const opt = (name: string) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };
   const users = Number(opt('users') ?? '200');
+  if (!Number.isInteger(users) || users < 2) { console.error('usage: node src/real/compare.ts [--store dir | --file f] [--users <int>=2]'); process.exit(2); }
   let records: SessionRecord[] = [];
   if (opt('file')) {
     const f = opt('file')!;

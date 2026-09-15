@@ -1,5 +1,5 @@
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
-import { createHash, randomInt } from 'node:crypto';
+import { createHash, createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { UIDocument } from './tree.ts';
@@ -33,7 +33,15 @@ import { assemble, validateRecord, type ExportedRecord } from './collect.ts';
  * (user, session); when several records arrive for one, the one with the
  * most events wins, since the page only ever appends events, so a final
  * record supersedes the snapshots that preceded it and a late snapshot
- * cannot undo a final. No dependencies; no authentication; local use.
+ * cannot undo a final.
+ *
+ * Authentication, when a token is set: operator routes (/, /sessions,
+ * /export.jsonl, /link) need `Authorization: Bearer <token>`; a user's
+ * screen URL carries an HMAC of the user id under the token
+ * (/u/<user>?k=<sig>), which the page also sends with its records, so a
+ * link cannot be guessed and a poster can only post for the user their
+ * link names. Without a token everything is open and the server refuses
+ * to bind anywhere but loopback. No dependencies.
  */
 export interface ServerOptions {
   store: string;
@@ -59,6 +67,11 @@ export interface ServerOptions {
   maxServesPerSession?: number;
   maxUsers?: number;
   maxNewUsersPerAddressPerHour?: number;
+  /**
+   * Shared secret. Set it to expose the server beyond loopback: operator
+   * routes require it as a bearer token and user links are signed with it.
+   */
+  token?: string;
   /**
    * Exploration seed. Unset (production): every serve draws from the OS
    * random source, so exploration is never correlated across users or
@@ -215,6 +228,22 @@ export function nextScreen(store: SessionStore, user: string, policy: ServerOpti
   return { doc, session, how: `${policy.name} policy${epsilon > 0 ? ` (ε ${epsilon})` : ' (greedy)'}, ${history.length} prior session(s)`, trace: serialiseTrace(user, session, doc.tree, trace, decisions) };
 }
 
+/** Signature of a user id under the token: the `k` in a user's link. */
+export function signUser(token: string, user: string): string {
+  return createHmac('sha256', token).update(`user:${user}`).digest('hex').slice(0, 32);
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const x = Buffer.from(a), y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+
+/** A non-loopback host without a token would hand out every session to anyone who can reach the port. */
+export function assertExposable(host: string, token: string | undefined): void {
+  const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1';
+  if (!loopback && !token) throw new Error(`refusing to bind to ${host} without a token: set --token (or PROTEUS_TOKEN) to expose the server`);
+}
+
 function readBody(req: IncomingMessage, max: number): Promise<string> {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -230,6 +259,23 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 export function createServer(opts: ServerOptions): Server {
   const store = new SessionStore(opts.store);
   const max = opts.maxBodyBytes ?? 1_000_000;
+  const token = opts.token;
+  // Failed authentications per address, sliding hour: a guessing caller is cut off.
+  const failures = new Map<string, number[]>();
+  const noteFailure = (address: string): boolean => {
+    const now = Date.now();
+    const times = (failures.get(address) ?? []).filter((t) => now - t < 3_600_000);
+    times.push(now);
+    failures.set(address, times);
+    return times.length <= 100;
+  };
+  const isOperator = (req: IncomingMessage): boolean => {
+    if (!token) return true;
+    const h = req.headers.authorization ?? '';
+    return h.startsWith('Bearer ') && safeEqual(h.slice(7), token);
+  };
+  const userSignatureOk = (user: string, k: string | null): boolean => !token || (k !== null && safeEqual(k, signUser(token, user)));
+  const userLink = (user: string): string => `/u/${user}${token ? `?k=${signUser(token, user)}` : ''}`;
   let serveCounter = 0;
   const serveSeed = (): number | undefined => (opts.seed === undefined ? undefined : (opts.seed * 1_000_003 + serveCounter++) >>> 0);
   // First-time user ids introduced per remote address, sliding hour.
@@ -249,10 +295,18 @@ export function createServer(opts: ServerOptions): Server {
 
   return createHttpServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
+    const address = req.socket.remoteAddress ?? 'unknown';
+    const deny = (status: number, message: string) => {
+      if (!noteFailure(address)) return send(res, 429, JSON.stringify({ ok: false, errors: ['too many failed requests from this address'] }));
+      return send(res, status, JSON.stringify({ ok: false, errors: [message] }));
+    };
     try {
       if (req.method === 'POST' && url.pathname === '/events') {
         let rec: unknown;
         try { rec = JSON.parse(await readBody(req, max)); } catch (e) { return send(res, 400, JSON.stringify({ ok: false, errors: [(e as Error).message] })); }
+        // A record may only be posted with the signature of the user it names.
+        const named = (rec as { user?: unknown })?.user;
+        if (token && (typeof named !== 'string' || !userSignatureOk(named, url.searchParams.get('k')))) return deny(403, 'record is not signed for its user');
         // Validation first, so a malformed record is a 400 the client must
         // fix, never a 429 it would retry. Then the posted-user cap, enforced
         // here as well as on serving: a user served while capacity remained
@@ -271,16 +325,22 @@ export function createServer(opts: ServerOptions): Server {
       if (req.method !== 'GET') return send(res, 405, JSON.stringify({ ok: false, errors: ['method not allowed'] }));
 
       if (url.pathname === '/') {
+        if (!isOperator(req)) return deny(401, 'operator token required');
         const users = store.users();
         const html = `<!doctype html><meta charset="utf-8"><title>Proteus</title><body style="font-family:system-ui;padding:24px;max-width:600px">
-<h1>Proteus</h1><p>Open a user's screen; use it; leave the tab. The page sends its session here. Reload the user's screen for the next one.</p>
-<p><a href="/u/${esc(`user-${Date.now().toString(36)}`)}">New user</a> · <a href="/export.jsonl">export.jsonl</a></p>
-<ul>${users.map((u) => `<li><a href="/u/${esc(u)}">${esc(u)}</a> (${store.records(u).length} sessions) · <a href="/sessions/${esc(u)}">data</a></li>`).join('')}</ul></body>`;
+<h1>Proteus</h1><p>Open a user's screen; use it; leave the tab. The page sends its session here. Reload the user's screen for the next one.${token ? ' Links are signed: mint one with <code>GET /link/&lt;user&gt;</code> and hand it out.' : ''}</p>
+<p><a href="${esc(userLink(`user-${Date.now().toString(36)}`))}">New user</a> · <a href="/export.jsonl">export.jsonl</a></p>
+<ul>${users.map((u) => `<li><a href="${esc(userLink(u))}">${esc(u)}</a> (${store.records(u).length} sessions) · <a href="/sessions/${esc(u)}">data</a></li>`).join('')}</ul></body>`;
         return send(res, 200, html, 'text/html');
       }
-      const m = /^\/(u|sessions)\/([A-Za-z0-9_.-]{1,64})$/.exec(url.pathname);
+      const m = /^\/(u|sessions|link)\/([A-Za-z0-9_.-]{1,64})$/.exec(url.pathname);
+      if (m && m[1] === 'link') {
+        if (!isOperator(req)) return deny(401, 'operator token required');
+        return send(res, 200, JSON.stringify({ user: m[2], path: userLink(m[2]) }));
+      }
       if (m && m[1] === 'u') {
         const user = m[2];
+        if (!userSignatureOk(user, url.searchParams.get('k'))) return deny(403, 'this link is not signed for this user');
         // Growth bounds: a caller cannot make the store grow without limit
         // by reloading, or by inventing users.
         const history = store.sessions(user);
@@ -292,9 +352,11 @@ export function createServer(opts: ServerOptions): Server {
         }
         const { doc, session, trace } = nextScreen(store, user, opts.policy, opts.epsilon ?? 0, serveSeed());
         if (trace) store.putTrace(trace);
-        return send(res, 200, renderPage(doc, fakeData, { user, session, endpoint: '/events' }), 'text/html');
+        const endpoint = token ? `/events?k=${signUser(token, user)}` : '/events';
+        return send(res, 200, renderPage(doc, fakeData, { user, session, endpoint }), 'text/html');
       }
       if (m && m[1] === 'sessions') {
+        if (!isOperator(req)) return deny(401, 'operator token required');
         const user = m[2];
         const sessions = store.sessions(user);
         const rewards = sessions.map((s) => sessionReward(s));
@@ -307,6 +369,7 @@ export function createServer(opts: ServerOptions): Server {
         }));
       }
       if (url.pathname === '/export.jsonl') {
+        if (!isOperator(req)) return deny(401, 'operator token required');
         return send(res, 200, store.records().map((r) => JSON.stringify(r)).join('\n') + '\n', 'application/x-ndjson');
       }
       return send(res, 404, JSON.stringify({ ok: false, errors: ['not found'] }));
@@ -328,8 +391,10 @@ if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
   const policyName = opt('policy', 'trained');
   const policyFile = opt('policy-file', 'out/policy.json');
   const epsilon = Number(opt('epsilon', '0.1'));
-  if (!Number.isInteger(port) || port < 1 || port > 65535 || !host || !(epsilon >= 0 && epsilon < 1)) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json] [--epsilon [0,1)=0.1]'); process.exit(2); }
-  if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') console.error(`warning: binding to ${host} exposes an unauthenticated server beyond this machine`);
+  const token = opt('token', process.env.PROTEUS_TOKEN ?? '') || undefined;
+  if (!Number.isInteger(port) || port < 1 || port > 65535 || !host || !(epsilon >= 0 && epsilon < 1)) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json] [--epsilon [0,1)=0.1] [--token <secret> | PROTEUS_TOKEN]'); process.exit(2); }
+  try { assertExposable(host, token); } catch (e) { console.error((e as Error).message); process.exit(2); }
+  if (token && token.length < 16) { console.error('token must be at least 16 characters'); process.exit(2); }
   let policy: ServerOptions['policy'];
   if (policyName === 'trained') {
     if (!existsSync(policyFile)) { console.error(`no trained policy at ${policyFile}; run npm run train first, or pass --policy random|<example>`); process.exit(1); }
@@ -340,5 +405,5 @@ if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
     if (!existsSync(f)) { console.error(`unknown policy '${policyName}'`); process.exit(2); }
     policy = JSON.parse(readFileSync(f, 'utf8')) as UIDocument;
   }
-  createServer({ store, policy, epsilon }).listen(port, host, () => console.log(`proteus serving on http://${host}:${port} (store ${store}, policy ${policyName}${policyName === 'trained' ? `, epsilon ${epsilon}` : ''})`));
+  createServer({ store, policy, epsilon, token }).listen(port, host, () => console.log(`proteus serving on http://${host}:${port} (store ${store}, policy ${policyName}${policyName === 'trained' ? `, epsilon ${epsilon}` : ''}, ${token ? 'token set: operator routes need a bearer token, user links are signed' : 'no token: open, loopback only'})`));
 }

@@ -26,9 +26,9 @@ Serving is bounded: at most 20 screens per (user, session) before it is
 posted; at most 10,000 users who have posted a session (a trace-only id
 does not consume a slot, so invented ids cannot exhaust it); and at most
 1,000 first-time user ids per remote address per sliding hour, which is
-what bounds trace growth from invented ids. None of this is
-authentication: the server binds to loopback by default, and exposing it
-further needs some. Exploration seeds come from the OS random source, so
+what bounds trace growth from invented ids. Exposing the server beyond
+loopback requires `--token`: operator routes take it as a bearer token and
+user links are signed with it (docs/instrumentation.md). Exploration seeds come from the OS random source, so
 two users in the same state never share an exploration sequence.
 
 ## `npm run train-real`

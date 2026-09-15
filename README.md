@@ -33,6 +33,7 @@ Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/s
 | `src/check-client.ts` | Recorder and collector checks |
 | `src/server.ts` | Local server: serves each user's next screen, receives the page's beacons, exports sessions |
 | `src/check-server.ts` | Server checks (in-process, ephemeral port) |
+| `src/check-auth.ts` | Token, signed links, operator routes, exposure guard |
 | `src/real/` | Training from stored real sessions, the sim-to-real comparison, synthetic clients |
 | `src/check-real.ts` | Real-session pipeline checks (serve with exploration → clients → train-real → compare) |
 | `schema/newsfeed.schema.json`, `schema/newsfeed.grammar.json` | Generated; do not edit |
@@ -55,6 +56,7 @@ npm run twins                                    # does within-episode experimen
 npm run demo                                     # render an instrumented screen (demo/index.html); export a session from it
 npm run collect -- --add session.json            # validate an exported session, append it, print reward and state
 npm run serve                                    # local server with exploration: /u/<user> serves screens, /events receives them, traces recorded
+PROTEUS_TOKEN=... npm run serve -- --host 0.0.0.0 # exposed: bearer token for operator routes, signed user links (GET /link/<user>)
 npm run clients -- --users 50 --sessions 5       # synthetic users against a running server (pipeline test, not a gap measurement)
 npm run train-real                               # policy-gradient epochs from the store's traced sessions -> out/policy-real.json
 npm run compare -- --store out/server            # real sessions vs simulated populations on the same trees, as z-scores

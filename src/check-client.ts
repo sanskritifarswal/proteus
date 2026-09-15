@@ -67,9 +67,25 @@ bad.events.push({ t: 0, type: 'open', path: 'nowhere', article: 'Z' });
 const errs = validateRecord(bad);
 report(errs.some((e) => e.includes('needs a numeric value')) && errs.some((e) => e.includes('not a node')) && errs.some((e) => e.includes('goes backwards') || e.includes('session_end')), `malformed records are rejected (${errs.length} errors)`);
 
+// Stricter validation: null article, negative dwell, empty events.
+{
+  const withNull = JSON.parse(JSON.stringify(record)); withNull.events[2].article = null;
+  const negDwell = JSON.parse(JSON.stringify(record)); negDwell.events[3].value = -5;
+  const empty = { ...JSON.parse(JSON.stringify(record)), events: [] };
+  report(validateRecord(withNull).some((e) => e.includes('article')) && validateRecord(negDwell).some((e) => e.includes('non-negative')) && validateRecord(empty).some((e) => e.includes('session_end')), 'null article, negative dwell and empty event lists are rejected');
+}
+
+// Duplicate (user, session) records are an error, not a phantom session.
+{
+  let threw = false;
+  try { assemble([record as never, record as never]); } catch { threw = true; }
+  report(threw, 'duplicate sessions are rejected by assemble');
+}
+
 // The embedded client script is well-formed.
 const js = clientScript();
 report(js.includes('function createRecorder') && !/^export\s/m.test(js) && !/^declare\s/m.test(js) && js.includes('IntersectionObserver'), `client script embeds without export/declare (${js.length} chars)`);
+report(!/\.innerHTML\s*=\s*[^'"]/.test(js.replace(/reader\.innerHTML = '<div class="proteus-reader-inner">[^;]*;/, '')), 'client script never assigns page content through innerHTML');
 
 console.log(failures ? `\n${failures} client check(s) failed` : '\nclient checks passed');
 process.exit(failures ? 1 : 0);

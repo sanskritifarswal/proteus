@@ -93,8 +93,11 @@ declare function createRecorder(opts: { user: string; session: number; grammar: 
     card.classList.add('opened');
     reader.querySelector('h1')!.textContent = card.dataset.article!;
     reader.querySelector('.proteus-meta')!.textContent = card.dataset.meta ?? '';
+    // Content goes in as text, never as markup: article text is data.
     const body = card.dataset.body ?? '';
-    reader.querySelector('.proteus-body')!.innerHTML = Array.from({ length: 8 }, () => `<p>${body}</p>`).join('');
+    const bodyEl = reader.querySelector('.proteus-body')!;
+    bodyEl.textContent = '';
+    for (let i = 0; i < 8; i++) { const para = document.createElement('p'); para.textContent = body; bodyEl.appendChild(para); }
     maxFraction = 0;
     inner.scrollTop = 0;
     reader.hidden = false;
@@ -110,7 +113,7 @@ declare function createRecorder(opts: { user: string; session: number; grammar: 
     }
   };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(rec.snapshot()); });
-  window.addEventListener('pagehide', () => { rec.end(); flush(rec.record()); });
+  window.addEventListener('pagehide', () => { closeReader(); rec.end(); flush(rec.record()); });
 
   const exportBox = document.getElementById('proteus-export') as HTMLTextAreaElement | null;
   const exportButton = document.getElementById('proteus-export-button');

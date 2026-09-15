@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { UIDocument } from './tree.ts';
 import type { SessionRecord } from './events.ts';
 import { makeRng } from './rng.ts';
-import { localUniform, sample } from './sample.ts';
+import { localUniform, sample, type Decision, type Policy } from './sample.ts';
 import { newsfeed } from './grammars/newsfeed.ts';
 import { fakeData } from './fake-data.ts';
 import { renderPage } from './render-html.ts';
@@ -12,7 +12,7 @@ import { sessionReward } from './reward.ts';
 import { stateFromHistory, STATE_NAMES } from './policy/features.ts';
 import { LinearPolicy } from './policy/linear-policy.ts';
 import { MlpPolicy } from './policy/mlp-policy.ts';
-import type { PolicyModel } from './policy/model.ts';
+import type { PolicyModel, Step, Trace } from './policy/model.ts';
 import { assemble, validateRecord, type ExportedRecord } from './collect.ts';
 
 /**
@@ -38,6 +38,28 @@ export interface ServerOptions {
   store: string;
   policy: PolicyModel | 'random' | UIDocument;
   maxBodyBytes?: number;
+  /**
+   * Exploration when serving with a learned policy: 0 serves greedily,
+   * > 0 samples from (1-ε)·policy + ε·uniform. Training from real
+   * sessions needs the sampling probabilities, so serve with ε > 0 and
+   * the trace of every served screen is recorded alongside it.
+   */
+  epsilon?: number;
+}
+
+/** A served screen's decision trace, serialised for the store. */
+export interface StoredTrace {
+  user: string;
+  session: number;
+  steps: Array<{
+    decision: Pick<Decision, 'kind' | 'path' | 'component' | 'context' | 'options'>;
+    keys: string[];
+    probs: number[];
+    sampled: number[];
+    epsilon: number;
+    chosen: number;
+    rawState: number[];
+  }>;
 }
 
 const topicByTitle = new Map<string, string>();
@@ -46,13 +68,22 @@ const topicOf = (t: string) => topicByTitle.get(t);
 
 export class SessionStore {
   private readonly current = new Map<string, ExportedRecord>();
+  private readonly traceMap = new Map<string, StoredTrace>();
   private readonly logFile: string;
+  private readonly traceFile: string;
   /** Log lines that could not be loaded, with reasons. */
   readonly skipped: string[] = [];
 
   constructor(dir: string) {
     mkdirSync(dir, { recursive: true });
     this.logFile = join(dir, 'events.jsonl');
+    this.traceFile = join(dir, 'traces.jsonl');
+    if (existsSync(this.traceFile)) {
+      readFileSync(this.traceFile, 'utf8').split('\n').forEach((line, i) => {
+        if (!line) return;
+        try { const t = JSON.parse(line) as StoredTrace; this.traceMap.set(`${t.user}:${t.session}`, t); } catch { this.skipped.push(`traces line ${i + 1}: not JSON`); }
+      });
+    }
     if (existsSync(this.logFile)) {
       const lines = readFileSync(this.logFile, 'utf8').split('\n');
       lines.forEach((line, i) => {
@@ -97,6 +128,25 @@ export class SessionStore {
   }
 
   sessions(user: string): SessionRecord[] { return assemble(this.records(user)).get(user) ?? []; }
+
+  /** Record the decision trace of a served screen (last one served for a session wins). */
+  putTrace(t: StoredTrace): void {
+    appendFileSync(this.traceFile, JSON.stringify(t) + '\n');
+    this.traceMap.set(`${t.user}:${t.session}`, t);
+  }
+
+  trace(user: string, session: number): StoredTrace | undefined { return this.traceMap.get(`${user}:${session}`); }
+  traceCount(): number { return this.traceMap.size; }
+}
+
+function serialiseTrace(user: string, session: number, trace: Trace, decisions: Decision[]): StoredTrace {
+  return {
+    user, session,
+    steps: trace.steps.map((st: Step, i) => ({
+      decision: { kind: decisions[i].kind, path: decisions[i].path, component: decisions[i].component, context: decisions[i].context, options: decisions[i].options },
+      keys: st.keys, probs: [...st.probs], sampled: [...st.sampled], epsilon: st.epsilon, chosen: st.chosen, rawState: [...st.rawState],
+    })),
+  };
 }
 
 export function loadPolicyFile(file: string): PolicyModel {
@@ -104,14 +154,21 @@ export function loadPolicyFile(file: string): PolicyModel {
   return json.model === 'mlp' ? MlpPolicy.fromJSON(json) : LinearPolicy.fromJSON(json);
 }
 
-export function nextScreen(store: SessionStore, user: string, policy: ServerOptions['policy']): { doc: UIDocument; session: number; how: string } {
+export function nextScreen(store: SessionStore, user: string, policy: ServerOptions['policy'], epsilon = 0): { doc: UIDocument; session: number; how: string; trace?: StoredTrace } {
   const history = store.sessions(user);
   const rewards = history.map((s) => sessionReward(s));
   const session = history.length ? history[history.length - 1].session + 1 : 0;
   if (policy === 'random') return { doc: sample(newsfeed, localUniform(makeRng(session * 7919 + user.length))), session, how: 'random' };
   if ('grammar' in policy) return { doc: policy, session, how: 'fixed' };
   const state = stateFromHistory(history, rewards, topicOf);
-  return { doc: sample(newsfeed, policy.forState(state, makeRng(session + 1), undefined, true)), session, how: `${policy.name} policy, ${history.length} prior session(s)` };
+  // A fresh seed per serve, so two users at the same state do not get the same exploration.
+  const rng = makeRng((Date.now() ^ (session * 7919) ^ user.length) >>> 0);
+  const trace: Trace = { steps: [] };
+  const decisions: Decision[] = [];
+  const inner = policy.forState(state, rng, trace, epsilon === 0, epsilon);
+  const recording: Policy = (d) => { decisions.push(d); return inner(d); };
+  const doc = sample(newsfeed, recording);
+  return { doc, session, how: `${policy.name} policy${epsilon > 0 ? ` (ε ${epsilon})` : ' (greedy)'}, ${history.length} prior session(s)`, trace: serialiseTrace(user, session, trace, decisions) };
 }
 
 function readBody(req: IncomingMessage, max: number): Promise<string> {
@@ -157,7 +214,8 @@ export function createServer(opts: ServerOptions): Server {
       const m = /^\/(u|sessions)\/([A-Za-z0-9_.-]{1,64})$/.exec(url.pathname);
       if (m && m[1] === 'u') {
         const user = m[2];
-        const { doc, session } = nextScreen(store, user, opts.policy);
+        const { doc, session, trace } = nextScreen(store, user, opts.policy, opts.epsilon ?? 0);
+        if (trace) store.putTrace(trace);
         return send(res, 200, renderPage(doc, fakeData, { user, session, endpoint: '/events' }), 'text/html');
       }
       if (m && m[1] === 'sessions') {
@@ -193,7 +251,8 @@ if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
   const store = opt('store', 'out/server');
   const policyName = opt('policy', 'trained');
   const policyFile = opt('policy-file', 'out/policy.json');
-  if (!Number.isInteger(port) || port < 1 || port > 65535 || !host) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json]'); process.exit(2); }
+  const epsilon = Number(opt('epsilon', '0.1'));
+  if (!Number.isInteger(port) || port < 1 || port > 65535 || !host || !(epsilon >= 0 && epsilon < 1)) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json] [--epsilon [0,1)=0.1]'); process.exit(2); }
   if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') console.error(`warning: binding to ${host} exposes an unauthenticated server beyond this machine`);
   let policy: ServerOptions['policy'];
   if (policyName === 'trained') {
@@ -205,5 +264,5 @@ if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
     if (!existsSync(f)) { console.error(`unknown policy '${policyName}'`); process.exit(2); }
     policy = JSON.parse(readFileSync(f, 'utf8')) as UIDocument;
   }
-  createServer({ store, policy }).listen(port, host, () => console.log(`proteus serving on http://${host}:${port} (store ${store}, policy ${policyName})`));
+  createServer({ store, policy, epsilon }).listen(port, host, () => console.log(`proteus serving on http://${host}:${port} (store ${store}, policy ${policyName}${policyName === 'trained' ? `, epsilon ${epsilon}` : ''})`));
 }

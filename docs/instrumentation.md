@@ -66,6 +66,10 @@ The same loop without copy-paste, in one dependency-free Node process:
 | `GET /sessions/<user>` | that user's assembled sessions with reward and next-session state |
 | `GET /export.jsonl` | every current session, one per line: the raw export |
 
+The learned policy is served with exploration (`--epsilon`, default 0.1)
+and every served screen's decision trace is recorded, so stored sessions
+can train the policy: see docs/real.md.
+
 Storage is an append-only JSONL log under `--store` (default
 `out/server`). A session is identified by (user, session). The page sends
 a snapshot on every hide and a final record on leave, and delivery order

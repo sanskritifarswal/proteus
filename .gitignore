@@ -2,3 +2,4 @@ node_modules/
 gallery/
 out/
 demo/
+.claude/

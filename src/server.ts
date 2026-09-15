@@ -73,6 +73,14 @@ export interface ServerOptions {
    */
   token?: string;
   /**
+   * Behind a tunnel or reverse proxy you control, every client arrives from
+   * the proxy's address, so failure counting by socket address would let
+   * one caller's bad requests lock out everyone. With trustProxy the client
+   * address is taken from the first X-Forwarded-For entry instead. Only set
+   * it when the proxy overwrites that header; otherwise it is spoofable.
+   */
+  trustProxy?: boolean;
+  /**
    * Exploration seed. Unset (production): every serve draws from the OS
    * random source, so exploration is never correlated across users or
    * predictable. Set (tests): serves are seeded from this number and a
@@ -308,7 +316,8 @@ export function createServer(opts: ServerOptions): Server {
 
   const server = createHttpServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    const address = req.socket.remoteAddress ?? 'unknown';
+    const forwarded = opts.trustProxy ? (req.headers['x-forwarded-for'] ?? '').toString().split(',')[0].trim() : '';
+    const address = forwarded || req.socket.remoteAddress || 'unknown';
     const deny = (status: number, message: string) => {
       noteFailure(address);
       return send(res, status, JSON.stringify({ ok: false, errors: [message] }));
@@ -395,16 +404,21 @@ export function createServer(opts: ServerOptions): Server {
       return send(res, 500, JSON.stringify({ ok: false, errors: [(e as Error).message] }));
     }
   });
-  // The exposure guard applies however the server is started: a listen on a
-  // non-loopback host (or on all interfaces, the default when no host is
-  // given) without a token throws.
+  // The exposure guard applies however the server is started: a TCP listen
+  // on a non-loopback host (or on all interfaces, the default when no host
+  // is given) without a token throws. A local IPC listen (a socket path, or
+  // an options object with `path`) exposes nothing and is not guarded.
   const originalListen = server.listen.bind(server);
   (server as { listen: (...args: unknown[]) => Server }).listen = (...args: unknown[]) => {
     const first = args[0];
-    const host = typeof args[1] === 'string' ? args[1]
-      : first && typeof first === 'object' && 'host' in first && typeof (first as { host?: unknown }).host === 'string' ? (first as { host: string }).host
-      : '0.0.0.0';
-    assertExposable(host, token);
+    const isObject = first !== null && typeof first === 'object';
+    const ipc = typeof first === 'string' || (isObject && typeof (first as { path?: unknown }).path === 'string');
+    if (!ipc) {
+      const host = typeof args[1] === 'string' ? args[1]
+        : isObject && typeof (first as { host?: unknown }).host === 'string' ? (first as { host: string }).host
+        : '0.0.0.0';
+      assertExposable(host, token);
+    }
     return originalListen(...(args as Parameters<Server['listen']>));
   };
   return server;
@@ -423,7 +437,8 @@ if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
   const policyFile = opt('policy-file', 'out/policy.json');
   const epsilon = Number(opt('epsilon', '0.1'));
   const token = opt('token', process.env.PROTEUS_TOKEN ?? '') || undefined;
-  if (!Number.isInteger(port) || port < 1 || port > 65535 || !host || !(epsilon >= 0 && epsilon < 1)) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json] [--epsilon [0,1)=0.1] [--token <secret> | PROTEUS_TOKEN]'); process.exit(2); }
+  const trustProxy = args.includes('--trust-proxy');
+  if (!Number.isInteger(port) || port < 1 || port > 65535 || !host || !(epsilon >= 0 && epsilon < 1)) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json] [--epsilon [0,1)=0.1] [--token <secret> | PROTEUS_TOKEN] [--trust-proxy]'); process.exit(2); }
   try { assertExposable(host, token); } catch (e) { console.error((e as Error).message); process.exit(2); }
   if (token && token.length < 16) { console.error('token must be at least 16 characters'); process.exit(2); }
   let policy: ServerOptions['policy'];
@@ -436,5 +451,5 @@ if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
     if (!existsSync(f)) { console.error(`unknown policy '${policyName}'`); process.exit(2); }
     policy = JSON.parse(readFileSync(f, 'utf8')) as UIDocument;
   }
-  createServer({ store, policy, epsilon, token }).listen(port, host, () => console.log(`proteus serving on http://${host}:${port} (store ${store}, policy ${policyName}${policyName === 'trained' ? `, epsilon ${epsilon}` : ''}, ${token ? 'token set: operator routes need a bearer token, user links are signed' : 'no token: open, loopback only'})`));
+  createServer({ store, policy, epsilon, token, trustProxy }).listen(port, host, () => console.log(`proteus serving on http://${host}:${port} (store ${store}, policy ${policyName}${policyName === 'trained' ? `, epsilon ${epsilon}` : ''}, ${token ? 'token set: operator routes need a bearer token, user links are signed' : 'no token: open, loopback only'})`));
 }

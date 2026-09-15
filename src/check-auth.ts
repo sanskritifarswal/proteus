@@ -62,6 +62,31 @@ report(await status('/link/bob') === 401, 'minting a link needs the operator tok
   report(!/href="\/export\.jsonl"/.test(index) && !/href="\/sessions\//.test(index) && index.includes('?k='), 'the operator page carries no links a browser could not authenticate');
 }
 
+// A local IPC listen exposes nothing and is not guarded.
+{
+  const sock = join(mkdtempSync(join(tmpdir(), 'proteus-ipc-')), 's.sock');
+  const ipc = createServer({ store: dir, policy: new LinearPolicy() });
+  let ok = true;
+  try { await new Promise<void>((r) => ipc.listen(sock, r)); } catch { ok = false; }
+  await new Promise<void>((r) => ipc.close(() => r()));
+  rmSync(join(sock, '..'), { recursive: true, force: true });
+  report(ok, 'an untokened server may listen on a Unix socket path');
+}
+
+// Behind a trusted proxy, failures are counted per forwarded client, not per tunnel address.
+{
+  const dir3 = mkdtempSync(join(tmpdir(), 'proteus-auth3-'));
+  const proxied = createServer({ store: dir3, policy: new LinearPolicy(), token, trustProxy: true, seed: 23 });
+  await new Promise<void>((r) => proxied.listen(0, '127.0.0.1', r));
+  const b3 = `http://127.0.0.1:${(proxied.address() as AddressInfo).port}`;
+  for (let i = 0; i < 100; i++) await fetch(`${b3}/u/alice?k=${i.toString(16).padStart(32, '0')}`, { headers: { 'x-forwarded-for': '203.0.113.9' } });
+  const attacker = (await fetch(`${b3}/u/alice?k=${signUser(token, 'alice')}`, { headers: { 'x-forwarded-for': '203.0.113.9' } })).status;
+  const neighbour = (await fetch(`${b3}/u/alice?k=${signUser(token, 'alice')}`, { headers: { 'x-forwarded-for': '203.0.113.10, 10.0.0.1' } })).status;
+  await new Promise<void>((r) => proxied.close(() => r()));
+  rmSync(dir3, { recursive: true, force: true });
+  report(attacker === 429 && neighbour === 200, `with trustProxy a blocked forwarded client does not block another behind the same tunnel (${attacker} vs ${neighbour})`);
+}
+
 // Programmatic startup enforces the same guards as the CLI.
 {
   let shortToken = false;

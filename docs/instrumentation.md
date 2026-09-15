@@ -101,7 +101,12 @@ loopback. With one (`--token <secret>`, at least 16 characters, or
 To reach it from a phone, put an HTTPS tunnel in front (any of the usual
 ones works; the server speaks plain HTTP on the port you give it) and send
 the minted link with the tunnel's host in place of localhost. Records are
-small and `sendBeacon` survives the tab closing.
+small and `sendBeacon` survives the tab closing. Behind a tunnel every
+client arrives from the tunnel's own address, so run with `--trust-proxy`
+to count authentication failures per forwarded client (first
+`X-Forwarded-For` entry) rather than per tunnel; otherwise one caller's bad
+requests would lock out everyone. Set it only when the proxy overwrites
+that header.
 
 This is enough to hand links to a few dozen people you know. It is not a
 multi-tenant service: one secret, no accounts, no rate limiting beyond

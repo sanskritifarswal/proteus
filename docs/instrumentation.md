@@ -76,7 +76,41 @@ a snapshot on every hide and a final record on leave, and delivery order
 is not guaranteed, so when several records arrive for one session the one
 with the most events wins: the page only ever appends events, so a final
 supersedes its snapshots and a late snapshot cannot undo a final. The
-store reloads from the log on start. No authentication; local use.
+store reloads from the log on start.
+
+### Exposing it: `--token`
+
+Without a token the server is open and refuses to bind anywhere but
+loopback. With one (`--token <secret>`, at least 16 characters, or
+`PROTEUS_TOKEN`):
+
+- Operator routes (`/`, `/sessions/<user>`, `/export.jsonl`, `/link/<user>`)
+  need `Authorization: Bearer <token>`. The token never goes in a URL.
+- A user's screen URL is signed: `/u/<user>?k=<hmac of the user id under
+  the token>`. Mint one with `GET /link/<user>` (operator) and hand it
+  out. An unsigned or mis-signed link is refused, so ids cannot be guessed.
+- The page posts its records to `/events?k=<same signature>`, so a poster
+  can only post sessions for the user their link names. A record without
+  its user's signature is refused.
+- Repeated failed authentication from one address is cut off (100 per
+  hour), and comparisons are constant-time.
+
+    PROTEUS_TOKEN=$(openssl rand -hex 24) npm run serve -- --host 0.0.0.0
+    curl -s -H "Authorization: Bearer $PROTEUS_TOKEN" localhost:8787/link/alice
+
+To reach it from a phone, put an HTTPS tunnel in front (any of the usual
+ones works; the server speaks plain HTTP on the port you give it) and send
+the minted link with the tunnel's host in place of localhost. Records are
+small and `sendBeacon` survives the tab closing. Behind a tunnel every
+client arrives from the tunnel's own address, so run with `--trust-proxy`
+to count authentication failures per forwarded client (first
+`X-Forwarded-For` entry) rather than per tunnel; otherwise one caller's bad
+requests would lock out everyone. Set it only when the proxy overwrites
+that header.
+
+This is enough to hand links to a few dozen people you know. It is not a
+multi-tenant service: one secret, no accounts, no rate limiting beyond
+the failed-auth cut-off.
 
     npm run train                 # a policy to serve with (or --policy random)
     npm run serve                 # http://localhost:8787

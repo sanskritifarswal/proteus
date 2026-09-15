@@ -59,6 +59,13 @@ export interface ServerOptions {
   maxServesPerSession?: number;
   maxUsers?: number;
   maxNewUsersPerAddressPerHour?: number;
+  /**
+   * Exploration seed. Unset (production): every serve draws from the OS
+   * random source, so exploration is never correlated across users or
+   * predictable. Set (tests): serves are seeded from this number and a
+   * per-server counter, so a run is repeatable.
+   */
+  seed?: number;
 }
 
 /** Identity of a served tree, so a posted record can be matched to the trace of the screen it came from. */
@@ -188,16 +195,17 @@ export function loadPolicyFile(file: string): PolicyModel {
   return json.model === 'mlp' ? MlpPolicy.fromJSON(json) : LinearPolicy.fromJSON(json);
 }
 
-export function nextScreen(store: SessionStore, user: string, policy: ServerOptions['policy'], epsilon = 0): { doc: UIDocument; session: number; how: string; trace?: StoredTrace } {
+export function nextScreen(store: SessionStore, user: string, policy: ServerOptions['policy'], epsilon = 0, seed?: number): { doc: UIDocument; session: number; how: string; trace?: StoredTrace } {
   const history = store.sessions(user);
   const rewards = history.map((s) => sessionReward(s));
   const session = history.length ? history[history.length - 1].session + 1 : 0;
   if (policy === 'random') return { doc: sample(newsfeed, localUniform(makeRng(session * 7919 + user.length))), session, how: 'random' };
   if ('grammar' in policy) return { doc: policy, session, how: 'fixed' };
   const state = stateFromHistory(history, rewards, topicOf);
-  // A fresh, unpredictable seed per serve: exploration must not be
-  // correlated across users, and the trace records what was sampled anyway.
-  const rng = makeRng(randomInt(0, 2 ** 31));
+  // A fresh, unpredictable seed per serve unless a seed was given: exploration
+  // must not be correlated across users, and the trace records what was
+  // sampled anyway.
+  const rng = makeRng(seed ?? randomInt(0, 2 ** 31));
   const trace: Trace = { steps: [] };
   const decisions: Decision[] = [];
   const inner = policy.forState(state, rng, trace, epsilon === 0, epsilon);
@@ -221,6 +229,8 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 export function createServer(opts: ServerOptions): Server {
   const store = new SessionStore(opts.store);
   const max = opts.maxBodyBytes ?? 1_000_000;
+  let serveCounter = 0;
+  const serveSeed = (): number | undefined => (opts.seed === undefined ? undefined : (opts.seed * 1_000_003 + serveCounter++) >>> 0);
   // First-time user ids introduced per remote address, sliding hour.
   const newUsersByAddress = new Map<string, number[]>();
   const allowNewUser = (address: string): boolean => {
@@ -268,7 +278,7 @@ export function createServer(opts: ServerOptions): Server {
           if (store.postedUsers() >= (opts.maxUsers ?? 10_000)) return send(res, 429, JSON.stringify({ ok: false, errors: ['user limit reached'] }));
           if (!allowNewUser(req.socket.remoteAddress ?? 'unknown')) return send(res, 429, JSON.stringify({ ok: false, errors: ['too many new users from this address; try later'] }));
         }
-        const { doc, session, trace } = nextScreen(store, user, opts.policy, opts.epsilon ?? 0);
+        const { doc, session, trace } = nextScreen(store, user, opts.policy, opts.epsilon ?? 0, serveSeed());
         if (trace) store.putTrace(trace);
         return send(res, 200, renderPage(doc, fakeData, { user, session, endpoint: '/events' }), 'text/html');
       }

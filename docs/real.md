@@ -78,7 +78,7 @@ users for up to 4 sessions each:
 - Serving a session more than the bound returns 429 until it is posted.
 - Importance weights start at 1.000; the surrogate objective rises across
   6 epochs.
-- Held-out simulated reward rises from 31.06 to 33.68 (+8%) from the
+- Held-out simulated reward rises from 31.06 to 32.70 (+5%) from the
   stored sessions alone, with no simulator in the training loop.
 - `compare` produces finite z-scores.
 

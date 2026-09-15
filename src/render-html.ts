@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
 import type { UIDocument, UINode } from './tree.ts';
 import type { Article, FeedData } from './fake-data.ts';
 
@@ -82,7 +84,10 @@ function renderNode(n: UINode, path: string, ctx: Ctx, data: FeedData): string {
       const meta = many(s.meta);
       const summary = one(s.summary);
       const actions = many(s.actions);
-      return `<article class="card variant-${esc(p.variant)}" data-path="${esc(path)}">` +
+      const a = ctx.article!;
+      // The article identity and enough content for the reader overlay, so
+      // instrumentation can name what was opened and show something to read.
+      return `<article class="card variant-${esc(p.variant)}" data-path="${esc(path)}" data-article="${esc(a.title)}" data-meta="${esc(`${a.source} · ${a.author} · ${a.readTime}`)}" data-body="${esc(a.dek)}">` +
         (media ? renderNode(media, sub(path, 'media'), ctx, data) : '') +
         `<div class="card-body">` +
         renderNode(title, sub(path, 'title'), ctx, data) +
@@ -155,3 +160,67 @@ export const screenCss = `
 .button.style-secondary { background: #f2f2f2; border-color: #f2f2f2; }
 .button.style-ghost { border-color: transparent; color: #333; padding-left: 4px; padding-right: 4px; }
 `;
+
+export interface InstrumentOptions {
+  user: string;
+  session: number;
+  /** Optional URL to POST the session record to on page hide (navigator.sendBeacon). */
+  endpoint?: string;
+}
+
+let cachedClient: string | undefined;
+
+/** The recorder and DOM binding, type-stripped for the browser. No bundler: two files concatenated. */
+export function clientScript(): string {
+  if (cachedClient) return cachedClient;
+  const strip = (file: string) => {
+    const src = readFileSync(new URL(`./client/${file}`, import.meta.url), 'utf8');
+    const out = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+    return out.replace(/^export\s+/gm, '').replace(/^export\s*\{[^}]*\};?\s*$/gm, '');
+  };
+  cachedClient = `${strip('recorder.ts')}\n${strip('instrument.ts')}`;
+  return cachedClient;
+}
+
+export const readerCss = `
+.proteus-reader { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 10; }
+.proteus-reader[hidden], #proteus-export[hidden] { display: none; }
+.proteus-reader-inner { background: #fff; color: #111; width: min(560px, 92vw); max-height: 80vh; overflow-y: auto; padding: 20px 24px; border-radius: 12px; font-family: -apple-system, system-ui, sans-serif; line-height: 1.5; }
+.proteus-reader-inner h1 { font-size: 22px; margin: 8px 0; }
+.proteus-meta { color: #666; font-size: 13px; margin: 0 0 12px; }
+.proteus-close { float: right; font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid #ccc; background: #f6f6f6; }
+.card.opened .text.role-title { color: #555; }
+.card.dismissed { opacity: .35; }
+.proteus-toolbar { width: 390px; margin: 8px 0; display: flex; gap: 8px; align-items: flex-start; font-family: -apple-system, system-ui, sans-serif; font-size: 13px; }
+#proteus-export { flex: 1; height: 80px; font-size: 11px; }
+`;
+
+/**
+ * A complete, self-contained page: one screen, its styles, and, when
+ * `instrument` is given, the recorder wired to it plus an export box. The
+ * tree is embedded so the exported record carries what was shown.
+ */
+export function renderPage(doc: UIDocument, data: FeedData, instrument?: InstrumentOptions): string {
+  let screen = renderDocument(doc, data);
+  let extras = '';
+  if (instrument) {
+    const cfg = { user: instrument.user, session: instrument.session, grammar: doc.grammar, endpoint: instrument.endpoint, storageKey: `proteus:${instrument.user}:${instrument.session}` };
+    screen = screen.replace('<div class="screen ', `<div data-proteus="${esc(JSON.stringify(cfg))}" class="screen `);
+    extras = `
+<div class="proteus-toolbar"><button id="proteus-export-button" type="button">Export session</button><textarea id="proteus-export" hidden readonly></textarea></div>
+<script type="application/json" id="proteus-tree">${JSON.stringify(doc.tree).replace(/</g, '\\u003c')}</script>
+<script>${clientScript()}</script>`;
+  }
+  return `<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proteus · ${esc(doc.grammar)}${instrument ? ` · ${esc(instrument.user)} session ${instrument.session}` : ''}</title>
+<style>
+body { margin: 0; padding: 16px; background: #e9e9ee; }
+${screenCss}
+${readerCss}
+</style>
+${screen}
+${extras}
+`;
+}

@@ -4,7 +4,7 @@ Generative UI framework. Developers define UI components at compile time as a ty
 (components, slots, valid slot types); at runtime a model assembles a personalised UI from that
 grammar. Currently at step one: getting the grammar right.
 
-Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/sampler.md) for the decision interface, [docs/gallery.md](docs/gallery.md) for the look-and-fix loop, [docs/simulator.md](docs/simulator.md) for events, reward and synthetic users, and [docs/policy.md](docs/policy.md) for the first learned policy.
+Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/sampler.md) for the decision interface, [docs/gallery.md](docs/gallery.md) for the look-and-fix loop, [docs/simulator.md](docs/simulator.md) for events, reward and synthetic users, [docs/policy.md](docs/policy.md) for the learned policy, and [docs/instrumentation.md](docs/instrumentation.md) for real sessions in the simulator's format.
 
 ## Layout
 
@@ -27,6 +27,10 @@ Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/s
 | `src/check-sim.ts` | Simulator checks (determinism, path validity, preferences move reward) |
 | `src/policy/` | State features, linear softmax policy, REINFORCE trainer, train-and-evaluate CLI |
 | `src/check-policy.ts` | Policy checks (determinism, untrained = uniform, short training improves) |
+| `src/client/` | Event recorder (no DOM, unit-tested) and the DOM binding embedded in rendered pages |
+| `src/collect.ts` | Validates exported sessions, derives `returned`, computes reward and state |
+| `src/demo.ts` | Renders the next instrumented screen for a user from their exported history |
+| `src/check-client.ts` | Recorder and collector checks |
 | `schema/newsfeed.schema.json`, `schema/newsfeed.grammar.json` | Generated; do not edit |
 | `examples/` | Example UI trees |
 
@@ -44,4 +48,6 @@ npm run gallery -- --seed 1 --n 20               # render 20 samples to gallery/
 npm run simulate -- --users 300 --sessions 10    # compare baseline policies on synthetic users; trajectories to out/
 npm run train                                    # train the linear policy, evaluate vs baselines on held-out users
 npm run twins                                    # does within-episode experimentation pay? full vs ablated state on the twins
+npm run demo                                     # render an instrumented screen (demo/index.html); export a session from it
+npm run collect -- --add session.json            # validate an exported session, append it, print reward and state
 ```

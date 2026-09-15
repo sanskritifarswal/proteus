@@ -51,9 +51,32 @@ Two design points that matter:
 ## Export
 
 The page exposes `window.proteus.export()` and an "Export session" button
-that fills a textarea with the record. `--endpoint <url>` makes the page
-also POST records with `sendBeacon` on hide and leave. No server exists in
-this repo; the endpoint is a hook for one.
+that fills a textarea with the record. With an endpoint configured the
+page also POSTs records with `sendBeacon` on hide and on leave.
+
+## The server (`npm run serve`)
+
+The same loop without copy-paste, in one dependency-free Node process:
+
+| route | what |
+|---|---|
+| `GET /` | index of users seen so far |
+| `GET /u/<user>` | the next instrumented screen for that user, chosen by the policy from their stored sessions; the page beacons to `/events` |
+| `POST /events` | a session record; validated with the collector, stored, deduplicated |
+| `GET /sessions/<user>` | that user's assembled sessions with reward and next-session state |
+| `GET /export.jsonl` | every current session, one per line: the raw export |
+
+Storage is an append-only JSONL log under `--store` (default
+`out/server`). A session is identified by (user, session). The page sends
+a snapshot on every hide and a final record on leave, and delivery order
+is not guaranteed, so when several records arrive for one session the one
+with the most events wins: the page only ever appends events, so a final
+supersedes its snapshots and a late snapshot cannot undo a final. The
+store reloads from the log on start. No authentication; local use.
+
+    npm run train                 # a policy to serve with (or --policy random)
+    npm run serve                 # http://localhost:8787
+    open http://localhost:8787/u/alice   # use it, leave the tab, reload for the next screen
 
 ## Validation (`collect.ts`)
 
@@ -74,6 +97,11 @@ reasons.
   session is censored.
 - Malformed records are rejected.
 - The embedded client script has no `export` or `declare` left in it.
+- Server (`check-server.ts`): serves a user's screen, accepts a snapshot,
+  lets the final replace it, ignores a late smaller snapshot, rejects
+  malformed and non-JSON bodies, assembles sessions with reward and state,
+  advances the session index, exports one line per session, and reloads
+  the store from its log.
 
 ## A real session, for the record
 
@@ -90,4 +118,5 @@ One session on the trained policy's screen, in the app's browser pane:
   dwell and completion from its own reader.
 - Impressions use a 300 ms, 50% visibility rule with no per-element
   attention model, the same simplification the simulator makes.
-- No server: exports are manual or via an endpoint the app provides.
+- The server is for local use: no authentication, no rate limiting, one
+  process, one log file.

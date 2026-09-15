@@ -31,6 +31,8 @@ Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/s
 | `src/collect.ts` | Validates exported sessions, derives `returned`, computes reward and state |
 | `src/demo.ts` | Renders the next instrumented screen for a user from their exported history |
 | `src/check-client.ts` | Recorder and collector checks |
+| `src/server.ts` | Local server: serves each user's next screen, receives the page's beacons, exports sessions |
+| `src/check-server.ts` | Server checks (in-process, ephemeral port) |
 | `schema/newsfeed.schema.json`, `schema/newsfeed.grammar.json` | Generated; do not edit |
 | `examples/` | Example UI trees |
 
@@ -50,4 +52,5 @@ npm run train                                    # train the linear policy, eval
 npm run twins                                    # does within-episode experimentation pay? full vs ablated state on the twins
 npm run demo                                     # render an instrumented screen (demo/index.html); export a session from it
 npm run collect -- --add session.json            # validate an exported session, append it, print reward and state
+npm run serve                                    # local server: /u/<user> serves screens, /events receives them, /export.jsonl
 ```

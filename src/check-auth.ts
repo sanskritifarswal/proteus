@@ -41,15 +41,37 @@ const link = await (await fetch(`${base}/link/bob`, { headers: bearer })).json()
 report(link.path === `/u/bob?k=${signUser(token, 'bob')}` && await status(link.path) === 200, `GET /link/<user> mints a working signed link (${link.path.slice(0, 20)}…)`);
 report(await status('/link/bob') === 401, 'minting a link needs the operator token');
 
-// Guessing is cut off: after the cap, even a good request from that address is 429 for a while.
+// Guessing is cut off: after the cap, even the CORRECT credential from that address is refused.
 {
-  const other = createServer({ store: mkdtempSync(join(tmpdir(), 'proteus-auth2-')), policy: new LinearPolicy(), token, seed: 22 });
+  const dir2 = mkdtempSync(join(tmpdir(), 'proteus-auth2-'));
+  const other = createServer({ store: dir2, policy: new LinearPolicy(), token, seed: 22 });
   await new Promise<void>((r) => other.listen(0, '127.0.0.1', r));
   const b2 = `http://127.0.0.1:${(other.address() as AddressInfo).port}`;
   let last = 0;
-  for (let i = 0; i < 101; i++) last = (await fetch(`${b2}/u/alice?k=${i.toString(16).padStart(32, '0')}`)).status;
+  for (let i = 0; i < 100; i++) last = (await fetch(`${b2}/u/alice?k=${i.toString(16).padStart(32, '0')}`)).status;
+  const goodAfter = (await fetch(`${b2}/u/alice?k=${signUser(token, 'alice')}`)).status;
+  const bearerAfter = (await fetch(`${b2}/export.jsonl`, { headers: bearer })).status;
   await new Promise<void>((r) => other.close(() => r()));
-  report(last === 429, `repeated failed authentication from one address is cut off (${last})`);
+  rmSync(dir2, { recursive: true, force: true });
+  report(last === 403 && goodAfter === 429 && bearerAfter === 429, `after the failure cap, even correct credentials from that address are refused (last guess ${last}, then good link ${goodAfter}, good bearer ${bearerAfter})`);
+}
+
+// The operator page in token mode links only to signed user screens, never to bearer-only routes.
+{
+  const index = await (await fetch(`${base}/`, { headers: bearer })).text();
+  report(!/href="\/export\.jsonl"/.test(index) && !/href="\/sessions\//.test(index) && index.includes('?k='), 'the operator page carries no links a browser could not authenticate');
+}
+
+// Programmatic startup enforces the same guards as the CLI.
+{
+  let shortToken = false;
+  try { createServer({ store: dir, policy: new LinearPolicy(), token: 'short' }); } catch { shortToken = true; }
+  let openExposed = false;
+  const open = createServer({ store: dir, policy: new LinearPolicy() });
+  try { open.listen(0, '0.0.0.0'); } catch { openExposed = true; }
+  let openDefault = false;
+  try { open.listen(0); } catch { openDefault = true; }
+  report(shortToken && openExposed && openDefault, 'createServer refuses a short token, and an untokened server refuses to listen beyond loopback or on all interfaces');
 }
 
 await new Promise<void>((r) => server.close(() => r()));

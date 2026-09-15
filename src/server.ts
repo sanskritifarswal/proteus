@@ -260,14 +260,27 @@ export function createServer(opts: ServerOptions): Server {
   const store = new SessionStore(opts.store);
   const max = opts.maxBodyBytes ?? 1_000_000;
   const token = opts.token;
-  // Failed authentications per address, sliding hour: a guessing caller is cut off.
+  if (token !== undefined && token.length < 16) throw new Error('token must be at least 16 characters');
+  // Failed authentications per address, sliding hour. An address over the
+  // cap is refused before its credentials are looked at, so guessing past
+  // the cap cannot succeed. Stale addresses are evicted; the map is bounded.
   const failures = new Map<string, number[]>();
-  const noteFailure = (address: string): boolean => {
+  const FAIL_CAP = 100, WINDOW = 3_600_000, MAX_ADDRESSES = 10_000;
+  const recent = (address: string, now: number): number[] => {
+    const times = (failures.get(address) ?? []).filter((t) => now - t < WINDOW);
+    if (times.length) failures.set(address, times); else failures.delete(address);
+    return times;
+  };
+  const blocked = (address: string): boolean => recent(address, Date.now()).length >= FAIL_CAP;
+  const noteFailure = (address: string): void => {
     const now = Date.now();
-    const times = (failures.get(address) ?? []).filter((t) => now - t < 3_600_000);
-    times.push(now);
-    failures.set(address, times);
-    return times.length <= 100;
+    if (!failures.has(address) && failures.size >= MAX_ADDRESSES) {
+      // Evict the address whose newest failure is oldest.
+      let victim: string | undefined, oldest = Infinity;
+      for (const [a, ts] of failures) { const t = ts[ts.length - 1] ?? 0; if (t < oldest) { oldest = t; victim = a; } }
+      if (victim !== undefined) failures.delete(victim);
+    }
+    failures.set(address, [...recent(address, now), now]);
   };
   const isOperator = (req: IncomingMessage): boolean => {
     if (!token) return true;
@@ -293,14 +306,16 @@ export function createServer(opts: ServerOptions): Server {
     res.end(body);
   };
 
-  return createHttpServer(async (req, res) => {
+  const server = createHttpServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const address = req.socket.remoteAddress ?? 'unknown';
     const deny = (status: number, message: string) => {
-      if (!noteFailure(address)) return send(res, 429, JSON.stringify({ ok: false, errors: ['too many failed requests from this address'] }));
+      noteFailure(address);
       return send(res, status, JSON.stringify({ ok: false, errors: [message] }));
     };
     try {
+      // Cut off a guessing address before looking at anything it presents.
+      if (token && blocked(address)) return send(res, 429, JSON.stringify({ ok: false, errors: ['too many failed requests from this address; try later'] }));
       if (req.method === 'POST' && url.pathname === '/events') {
         let rec: unknown;
         try { rec = JSON.parse(await readBody(req, max)); } catch (e) { return send(res, 400, JSON.stringify({ ok: false, errors: [(e as Error).message] })); }
@@ -327,10 +342,13 @@ export function createServer(opts: ServerOptions): Server {
       if (url.pathname === '/') {
         if (!isOperator(req)) return deny(401, 'operator token required');
         const users = store.users();
-        const html = `<!doctype html><meta charset="utf-8"><title>Proteus</title><body style="font-family:system-ui;padding:24px;max-width:600px">
-<h1>Proteus</h1><p>Open a user's screen; use it; leave the tab. The page sends its session here. Reload the user's screen for the next one.${token ? ' Links are signed: mint one with <code>GET /link/&lt;user&gt;</code> and hand it out.' : ''}</p>
-<p><a href="${esc(userLink(`user-${Date.now().toString(36)}`))}">New user</a> · <a href="/export.jsonl">export.jsonl</a></p>
-<ul>${users.map((u) => `<li><a href="${esc(userLink(u))}">${esc(u)}</a> (${store.records(u).length} sessions) · <a href="/sessions/${esc(u)}">data</a></li>`).join('')}</ul></body>`;
+        // In token mode the data routes need a bearer header, which a browser
+        // link cannot carry, so the page shows the commands instead of links.
+        const data = (path: string) => (token ? `<code>curl -H "Authorization: Bearer …" ${esc(path)}</code>` : `<a href="${esc(path)}">${esc(path.replace(/^\//, ''))}</a>`);
+        const html = `<!doctype html><meta charset="utf-8"><title>Proteus</title><body style="font-family:system-ui;padding:24px;max-width:640px">
+<h1>Proteus</h1><p>Open a user's screen; use it; leave the tab. The page sends its session here. Reload the user's screen for the next one.${token ? ' Links are signed: mint one with <code>GET /link/&lt;user&gt;</code> (bearer token) and hand it out.' : ''}</p>
+<p><a href="${esc(userLink(`user-${Date.now().toString(36)}`))}">New user</a> · ${data('/export.jsonl')}</p>
+<ul>${users.map((u) => `<li><a href="${esc(userLink(u))}">${esc(u)}</a> (${store.records(u).length} sessions) · ${data(`/sessions/${u}`)}</li>`).join('')}</ul></body>`;
         return send(res, 200, html, 'text/html');
       }
       const m = /^\/(u|sessions|link)\/([A-Za-z0-9_.-]{1,64})$/.exec(url.pathname);
@@ -377,6 +395,19 @@ export function createServer(opts: ServerOptions): Server {
       return send(res, 500, JSON.stringify({ ok: false, errors: [(e as Error).message] }));
     }
   });
+  // The exposure guard applies however the server is started: a listen on a
+  // non-loopback host (or on all interfaces, the default when no host is
+  // given) without a token throws.
+  const originalListen = server.listen.bind(server);
+  (server as { listen: (...args: unknown[]) => Server }).listen = (...args: unknown[]) => {
+    const first = args[0];
+    const host = typeof args[1] === 'string' ? args[1]
+      : first && typeof first === 'object' && 'host' in first && typeof (first as { host?: unknown }).host === 'string' ? (first as { host: string }).host
+      : '0.0.0.0';
+    assertExposable(host, token);
+    return originalListen(...(args as Parameters<Server['listen']>));
+  };
+  return server;
 }
 
 if (process.argv[1] && process.argv[1].endsWith('server.ts')) {

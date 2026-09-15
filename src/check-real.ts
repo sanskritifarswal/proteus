@@ -102,9 +102,10 @@ report(r.skippedNoTrace === 1 && r.skippedGreedy === 1 && r.usable === clients.s
   const tree = new SessionStore(dir).sessions(store.users()[0])[0].tree;
   const mk = (user: string) => { const r = createRecorder({ user, session: 0, grammar: 'newsfeed@0.3.0', tree, now: () => 0 }); r.impression('sections[0].content.item', 'A'); r.end(); return r.record(); };
   const newcomer = (await fetch(`${b}/events`, { method: 'POST', body: JSON.stringify(mk('late-arrival')) })).status;
+  const malformed = (await fetch(`${b}/events`, { method: 'POST', body: JSON.stringify({ user: 'late-arrival-2' }) })).status;
   const existing = (await fetch(`${b}/events`, { method: 'POST', body: JSON.stringify({ ...mk(store.users()[0]), session: 99 }) })).status;
   await new Promise<void>((r) => full.close(() => r()));
-  report(newcomer === 429 && existing === 200 && new SessionStore(dir).postedUsers() === posted, `posting cannot exceed the posted-user cap (newcomer ${newcomer}, existing user ${existing}, posted ${posted} -> ${new SessionStore(dir).postedUsers()})`);
+  report(newcomer === 429 && existing === 200 && malformed === 400 && new SessionStore(dir).postedUsers() === posted, `posting cannot exceed the posted-user cap, and a malformed record at the cap is still a 400 (newcomer ${newcomer}, existing ${existing}, malformed ${malformed}, posted ${posted} -> ${new SessionStore(dir).postedUsers()})`);
 }
 
 // Growth bound: a session cannot be served more than maxServesPerSession times before it is posted.

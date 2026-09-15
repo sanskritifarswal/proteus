@@ -253,11 +253,15 @@ export function createServer(opts: ServerOptions): Server {
       if (req.method === 'POST' && url.pathname === '/events') {
         let rec: unknown;
         try { rec = JSON.parse(await readBody(req, max)); } catch (e) { return send(res, 400, JSON.stringify({ ok: false, errors: [(e as Error).message] })); }
-        // The posted-user cap is enforced here as well as on serving: a user
-        // served while capacity remained must not push the count over the cap
-        // by posting after others have filled it.
-        const user = (rec as { user?: unknown })?.user;
-        if (typeof user === 'string' && !store.hasPosted(user) && store.postedUsers() >= (opts.maxUsers ?? 10_000)) {
+        // Validation first, so a malformed record is a 400 the client must
+        // fix, never a 429 it would retry. Then the posted-user cap, enforced
+        // here as well as on serving: a user served while capacity remained
+        // must not push the count over the cap by posting after others
+        // filled it.
+        const invalid = validateRecord(rec);
+        if (invalid.length) return send(res, 400, JSON.stringify({ ok: false, errors: invalid }));
+        const user = (rec as { user: string }).user;
+        if (!store.hasPosted(user) && store.postedUsers() >= (opts.maxUsers ?? 10_000)) {
           return send(res, 429, JSON.stringify({ ok: false, errors: ['user limit reached'] }));
         }
         const { errors, replaced } = store.put(rec);

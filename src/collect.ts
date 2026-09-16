@@ -20,7 +20,6 @@ import { fakeData } from './fake-data.ts';
  * usage: node src/collect.ts --file out/sessions.jsonl [--add record.json] [--user id]
  */
 export interface ExportedRecord extends Omit<SessionRecord, 'returned'> {
-  startedAt?: string;
   returned: boolean | null;
 }
 
@@ -29,6 +28,7 @@ export function validateRecord(rec: unknown): string[] {
   const r = rec as Partial<ExportedRecord>;
   if (typeof r !== 'object' || r === null) return ['record is not an object'];
   if (typeof r.user !== 'string' || !r.user) errors.push('user must be a non-empty string');
+  if (r.startedAt !== undefined && (typeof r.startedAt !== 'string' || !Number.isFinite(Date.parse(r.startedAt)))) errors.push('startedAt, when present, must be a parseable ISO timestamp string');
   if (!Number.isInteger(r.session) || (r.session as number) < 0) errors.push('session must be a non-negative integer');
   if (r.grammar !== grammarId(newsfeed)) errors.push(`grammar is '${r.grammar}', expected '${grammarId(newsfeed)}'`);
   if (typeof r.tree !== 'object' || r.tree === null || (r.tree as UINode).type !== newsfeed.root) errors.push('tree must be a Screen node');
@@ -85,7 +85,7 @@ export function assemble(records: ExportedRecord[]): Map<string, SessionRecord[]
   const out = new Map<string, SessionRecord[]>();
   for (const [user, list] of byUser) {
     list.sort((a, b) => a.session - b.session);
-    out.set(user, list.map((r, i) => ({ user: r.user, session: r.session, grammar: r.grammar, tree: r.tree, events: r.events, returned: i < list.length - 1 ? true : null })));
+    out.set(user, list.map((r, i) => ({ user: r.user, session: r.session, grammar: r.grammar, tree: r.tree, events: r.events, returned: i < list.length - 1 ? true : null, ...(r.startedAt ? { startedAt: r.startedAt } : {}) })));
   }
   return out;
 }

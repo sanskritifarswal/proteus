@@ -15,6 +15,7 @@ import { LinearPolicy } from './policy/linear-policy.ts';
 import { MlpPolicy } from './policy/mlp-policy.ts';
 import type { PolicyModel, Step, Trace } from './policy/model.ts';
 import { assemble, validateRecord, type ExportedRecord } from './collect.ts';
+import { StatusReporter, renderStatus } from './status.ts';
 
 /**
  * The smallest server that closes the loop without copy-paste.
@@ -28,6 +29,8 @@ import { assemble, validateRecord, type ExportedRecord } from './collect.ts';
  *   GET  /sessions/<user>  that user's assembled sessions with reward and
  *                          next-session state, as JSON
  *   GET  /export.jsonl     every current session, one per line: the raw export
+ *   GET  /status           readers, sessions, reward by session index, the
+ *                          sim-to-real gap on recent sessions (HTML; .json too)
  *
  * Storage is an append-only JSONL log. A session is identified by
  * (user, session); when several records arrive for one, the one with the
@@ -87,6 +90,8 @@ export interface ServerOptions {
    * per-server counter, so a run is repeatable.
    */
   seed?: number;
+  /** Simulated readers per real session on the status page's gap table. Default 50. */
+  statusSimUsers?: number;
   /**
    * What fills the screen's feeds for each user. Default: the fake data,
    * the same for everyone. Live syndicated content with personal feeds
@@ -277,6 +282,8 @@ export function createServer(opts: ServerOptions): Server {
   // Show a live provider every known reader's history once, so the articles
   // they saved or left unfinished are pinned before a refresh could drop them.
   for (const u of store.users()) content.forUser(store.sessions(u));
+  const policyName = opts.policy === 'random' ? 'random' : 'grammar' in opts.policy ? 'fixed' : opts.policy.name;
+  const status = new StatusReporter(store, { policy: policyName, epsilon: opts.epsilon ?? 0, startedAt: Date.now(), content, simUsers: opts.statusSimUsers });
   // Failed authentications per address, sliding hour. An address over the
   // cap is refused before its credentials are looked at, so guessing past
   // the cap cannot succeed. Stale addresses are evicted; the map is bounded.
@@ -364,7 +371,7 @@ export function createServer(opts: ServerOptions): Server {
         const data = (path: string) => (token ? `<code>curl -H "Authorization: Bearer …" ${esc(path)}</code>` : `<a href="${esc(path)}">${esc(path.replace(/^\//, ''))}</a>`);
         const html = `<!doctype html><meta charset="utf-8"><title>Proteus</title><body style="font-family:system-ui;padding:24px;max-width:640px">
 <h1>Proteus</h1><p>Open a user's screen; use it; leave the tab. The page sends its session here. Reload the user's screen for the next one.${token ? ' Links are signed: mint one with <code>GET /link/&lt;user&gt;</code> (bearer token) and hand it out.' : ''}</p>
-<p><a href="${esc(userLink(`user-${Date.now().toString(36)}`))}">New user</a> · ${data('/export.jsonl')}</p>
+<p><a href="${esc(userLink(`user-${Date.now().toString(36)}`))}">New user</a> · ${data('/status')} · ${data('/export.jsonl')}</p>
 <ul>${users.map((u) => `<li><a href="${esc(userLink(u))}">${esc(u)}</a> (${store.records(u).length} sessions) · ${data(`/sessions/${u}`)}</li>`).join('')}</ul></body>`;
         return send(res, 200, html, 'text/html');
       }
@@ -402,6 +409,15 @@ export function createServer(opts: ServerOptions): Server {
           nextState: Object.fromEntries(STATE_NAMES.map((n, i) => [n, state[i]])),
           records: sessions,
         }));
+      }
+      if (url.pathname === '/status' || url.pathname === '/status.json') {
+        if (!isOperator(req)) return deny(401, 'operator token required');
+        const recentRaw = url.searchParams.get('recent');
+        const recent = recentRaw === null ? undefined : Number(recentRaw);
+        if (recent !== undefined && !(Number.isInteger(recent) && recent >= 1 && recent <= 500)) return send(res, 400, JSON.stringify({ ok: false, errors: ['recent must be an integer in 1..500'] }));
+        const report = status.compute({ sim: url.searchParams.get('sim') !== '0', recent });
+        if (url.pathname === '/status.json') return send(res, 200, JSON.stringify(report));
+        return send(res, 200, renderStatus(report, userLink), 'text/html');
       }
       if (url.pathname === '/export.jsonl') {
         if (!isOperator(req)) return deny(401, 'operator token required');

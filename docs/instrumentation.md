@@ -65,6 +65,7 @@ The same loop without copy-paste, in one dependency-free Node process:
 | `POST /events` | a session record; validated with the collector, stored, deduplicated |
 | `GET /sessions/<user>` | that user's assembled sessions with reward and next-session state |
 | `GET /export.jsonl` | every current session, one per line: the raw export |
+| `GET /status` | readers, sessions, mean reward by session index, the sim-to-real gap on recent sessions; `/status.json` for scripts; `?sim=0` skips the simulation, `?recent=N` sets how many sessions it covers |
 
 The learned policy is served with exploration (`--epsilon`, default 0.1)
 and every served screen's decision trace is recorded, so stored sessions
@@ -84,7 +85,7 @@ Without a token the server is open and refuses to bind anywhere but
 loopback. With one (`--token <secret>`, at least 16 characters, or
 `PROTEUS_TOKEN`):
 
-- Operator routes (`/`, `/sessions/<user>`, `/export.jsonl`, `/link/<user>`)
+- Operator routes (`/`, `/status`, `/sessions/<user>`, `/export.jsonl`, `/link/<user>`)
   need `Authorization: Bearer <token>`. The token never goes in a URL.
 - A user's screen URL is signed: `/u/<user>?k=<hmac of the user id under
   the token>`. Mint one with `GET /link/<user>` (operator) and hand it

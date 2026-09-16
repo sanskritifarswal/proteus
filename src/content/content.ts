@@ -33,13 +33,15 @@ export interface ContentProvider {
   forUser(history: SessionRecord[]): FeedData;
   /** Topic of an article by title, for the policy's topic features. */
   topicOf(title: string): string | undefined;
+  /** For the status page: what this provider is serving. */
+  describe?(): { mode: 'fake' | 'live'; pool?: number; fetchedAt?: string | null; errors?: Record<string, string> };
 }
 
 /** The same data for everyone: the fake data, or any fixed FeedData. */
 export function staticContent(data: FeedData = fakeData): ContentProvider {
   const topics = new Map<string, string>();
   for (const f of Object.values(data.feeds)) for (const a of f.articles) topics.set(a.title, a.topic);
-  return { forUser: () => data, topicOf: (t) => topics.get(t) };
+  return { forUser: () => data, topicOf: (t) => topics.get(t), describe: () => ({ mode: 'fake' }) };
 }
 
 export interface FeedSpec {
@@ -323,6 +325,10 @@ export class LiveContent implements ContentProvider {
   }
 
   topicOf(title: string): string | undefined { return this.byTitle.get(title)?.topic; }
+
+  describe(): { mode: 'live'; pool: number; fetchedAt: string | null; errors: Record<string, string> } {
+    return { mode: 'live', pool: this.pool.length, fetchedAt: this.fetchedAt ? new Date(this.fetchedAt).toISOString() : null, errors: Object.fromEntries(this.errors) };
+  }
 
   private actionsOf(history: SessionRecord[]): UserActions {
     const acts: UserActions = { dismissed: new Set(), saved: [], followedSources: new Set(), unfinished: [], topicOpens: new Map() };

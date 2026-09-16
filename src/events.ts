@@ -56,6 +56,8 @@ export interface SessionRecord {
    * outcome is censored, not false. Reward treats null as no return bonus.
    */
   returned: boolean | null;
+  /** Wall-clock start as an ISO string, when the recorder had one. The simulator leaves it unset. */
+  startedAt?: string;
 }
 
 export interface Trajectory {

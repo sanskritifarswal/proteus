@@ -7,7 +7,6 @@ import { LiveContent, staticContent, type ContentProvider } from '../content/con
 import { makePopulation } from '../sim/users.ts';
 import { simulateSession } from '../sim/simulate.ts';
 import { sessionReward } from '../reward.ts';
-import { SessionStore } from '../server.ts';
 import { assemble, type ExportedRecord } from '../collect.ts';
 
 /**
@@ -100,6 +99,8 @@ if (process.argv[1] && basename(process.argv[1]) === 'compare.ts') {
     const raw = readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as ExportedRecord);
     records = [...assemble(raw).values()].flat();
   } else {
+    // Imported here, not at the top: the server imports this module for its status page.
+    const { SessionStore } = await import('../server.ts');
     const store = new SessionStore(opt('store') ?? 'out/server');
     records = store.users().flatMap((u) => store.sessions(u));
   }

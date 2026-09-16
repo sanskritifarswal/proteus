@@ -20,7 +20,6 @@ import { fakeData } from './fake-data.ts';
  * usage: node src/collect.ts --file out/sessions.jsonl [--add record.json] [--user id]
  */
 export interface ExportedRecord extends Omit<SessionRecord, 'returned'> {
-  startedAt?: string;
   returned: boolean | null;
 }
 
@@ -85,7 +84,7 @@ export function assemble(records: ExportedRecord[]): Map<string, SessionRecord[]
   const out = new Map<string, SessionRecord[]>();
   for (const [user, list] of byUser) {
     list.sort((a, b) => a.session - b.session);
-    out.set(user, list.map((r, i) => ({ user: r.user, session: r.session, grammar: r.grammar, tree: r.tree, events: r.events, returned: i < list.length - 1 ? true : null })));
+    out.set(user, list.map((r, i) => ({ user: r.user, session: r.session, grammar: r.grammar, tree: r.tree, events: r.events, returned: i < list.length - 1 ? true : null, ...(r.startedAt ? { startedAt: r.startedAt } : {}) })));
   }
   return out;
 }

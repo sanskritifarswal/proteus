@@ -52,9 +52,24 @@ things like "World news | The Guardian" and many feeds carry no categories.
 | saved | articles the reader pressed Save on, latest save first |
 | continueReading | articles opened and left before 90%, latest first; finishing one removes it |
 
-An article the reader dismissed never comes back for them. Saved and
-half-read articles stay in the pool after their feed drops them, up to
-`poolSize`.
+An article the reader dismissed never comes back for them.
+
+The pool after a refresh is exactly what the feeds list now, plus the
+previous articles of any feed that failed this time, plus *pinned*
+articles: ones some reader saved, followed from, or left unfinished. Pinned
+articles are kept for those readers' Saved and Continue Reading lists but
+are marked out of feed and never recommended again, so a retracted or
+rotated-out story leaves Top Stories and For You at the next refresh.
+Pins do not count against `poolSize`; `pinLimit` (default 1000) bounds
+them, oldest pin first. Pins are persisted with the cache within a minute
+of being made, and the server shows the provider every known reader's
+history at start, so a restart does not lose them.
+
+Pool identity is the article URL (the title when a feed gives none).
+Events name an article by title, so a title resolves to the newest pooled
+article carrying it, and a served list holds one card per title: two feeds
+publishing one headline, or a headline reused a week later, cannot produce
+two cards a reader's events could not tell apart.
 
 A personal feed with nothing in it is served empty and the renderer shows
 an empty state ("Nothing here yet."). It is not padded with
@@ -64,6 +79,11 @@ the opposite of the truth. The policy's `personalFeedLift` feature and the
 open rate of those sections carry the real signal.
 
 ## The parser
+
+Feeds are fetched with a 15 s timeout and a 5 MB byte cap, checked
+against the declared length and again while streaming, so a feed that
+answers with gigabytes fails on its own rather than taking the process
+down.
 
 RSS 2.0 and Atom, by regex, no dependencies. From each item: title, link
 (Atom: `rel="alternate"` preferred), summary or description, full content

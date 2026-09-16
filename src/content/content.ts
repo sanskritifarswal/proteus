@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Article, FeedData } from '../fake-data.ts';
 import { fakeData } from '../fake-data.ts';
@@ -54,8 +54,10 @@ export interface ContentConfig {
   feeds: Array<string | FeedSpec>;
   /** How often to refetch, in minutes. Default 30. */
   refreshMinutes?: number;
-  /** Articles kept in the pool across refreshes, newest first. Default 2000. */
+  /** Articles kept in the pool, newest first. Default 2000. */
   poolSize?: number;
+  /** Articles a reader acted on (saved, followed from, left unfinished) that are kept after their feed drops them. Default 1000. */
+  pinLimit?: number;
   /** Items per feed to serve in topStories and forYou. Default 40. */
   perFeed?: number;
 }
@@ -74,21 +76,53 @@ export interface PooledArticle {
   feedUrl: string;
   /** When this article was first seen, so unchanged items keep their order across refreshes. */
   seen: number;
+  /** Still listed by its feed as of the last refresh. Only these are recommended; the rest are kept for readers who acted on them. */
+  inFeed: boolean;
+}
+
+/** Pool identity: the url when the feed gives one, else the title. Events name articles by title; see `byTitle`. */
+export function articleId(a: { url?: string; title: string }): string {
+  return a.url ?? `title:${a.title}`;
 }
 
 export interface Snapshot {
   fetchedAt: number;
   articles: PooledArticle[];
+  /** Titles readers have saved, followed from or left unfinished, newest pin last; kept in the pool across refreshes. */
+  pinned?: string[];
 }
 
 export type FetchText = (url: string) => Promise<string>;
 
-/** A fetcher with a timeout and an identifying agent, for feeds that block anonymous clients. */
-export const httpFetch: FetchText = async (url) => {
-  const res = await fetch(url, { signal: AbortSignal.timeout(15_000), headers: { 'user-agent': 'proteus/0.1 (+https://github.com/sanskritifarswal/proteus)', accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5' } });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.text();
-};
+/**
+ * A fetcher with a timeout, a byte cap and an identifying agent (some feeds
+ * block anonymous clients). The cap matters: feeds are third-party input
+ * read concurrently, and one that answers with gigabytes must fail, not
+ * take the process down.
+ */
+export function makeHttpFetch(opts: { maxBytes?: number; timeoutMs?: number; fetchImpl?: typeof fetch } = {}): FetchText {
+  const maxBytes = opts.maxBytes ?? 5_000_000;
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  return async (url) => {
+    const res = await fetchImpl(url, { signal: AbortSignal.timeout(opts.timeoutMs ?? 15_000), headers: { 'user-agent': 'proteus/0.1 (+https://github.com/sanskritifarswal/proteus)', accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5' } });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const declared = Number(res.headers.get('content-length'));
+    if (declared > maxBytes) throw new Error(`response too large (${declared} bytes, cap ${maxBytes})`);
+    if (!res.body) return '';
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) { await reader.cancel().catch(() => {}); throw new Error(`response too large (over ${maxBytes} bytes)`); }
+      chunks.push(value);
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  };
+}
+export const httpFetch: FetchText = makeHttpFetch();
 
 const PALETTE = ['#c9d6df', '#f0c9a0', '#b8d8be', '#e7b8c8', '#d6cbe7', '#f2e2a2', '#a9d1e0', '#e0b8a9'];
 function placeholder(seed: string): string {
@@ -133,9 +167,22 @@ interface UserActions {
 
 export class LiveContent implements ContentProvider {
   private pool: PooledArticle[] = [];
+  private byId = new Map<string, PooledArticle>();
+  /**
+   * Events name an article by title, so a title resolves to the newest
+   * pooled article carrying it. Two feeds publishing one headline, or a
+   * headline reused weeks later, therefore point at the latest; served
+   * lists are deduplicated by title so a page never shows two cards a
+   * reader's events could not tell apart.
+   */
   private byTitle = new Map<string, PooledArticle>();
+  /** Titles readers acted on, insertion-ordered oldest first; survive their feed dropping them, up to pinLimit. */
+  private pinned = new Set<string>();
+  /** Pins made since the cache was last written. */
+  private dirty = false;
   private fetchedAt = 0;
   private timer: NodeJS.Timeout | undefined;
+  private flushTimer: NodeJS.Timeout | undefined;
   private readonly cfg: ContentConfig;
   private readonly specs: FeedSpec[];
   private readonly fetchText: FetchText;
@@ -157,7 +204,8 @@ export class LiveContent implements ContentProvider {
     if (this.cacheFile && existsSync(this.cacheFile)) {
       try {
         const snap = JSON.parse(readFileSync(this.cacheFile, 'utf8')) as Snapshot;
-        this.setPool(snap.articles, snap.fetchedAt);
+        for (const t of snap.pinned ?? []) this.pinned.add(t);
+        this.setPool(snap.articles.map((a) => ({ ...a, inFeed: a.inFeed ?? true })), snap.fetchedAt);
         this.log(`content: loaded ${snap.articles.length} cached article(s)`);
       } catch (e) { this.log(`content: ignoring unreadable cache ${this.cacheFile}: ${(e as Error).message}`); }
     }
@@ -168,37 +216,71 @@ export class LiveContent implements ContentProvider {
 
   private setPool(articles: PooledArticle[], fetchedAt: number): void {
     const limit = this.cfg.poolSize ?? 2000;
-    this.pool = [...articles].sort((a, b) => b.published - a.published || b.seen - a.seen).slice(0, limit);
-    this.byTitle = new Map(this.pool.map((a) => [a.title, a]));
+    const sorted = [...articles].sort((a, b) => b.published - a.published || b.seen - a.seen);
+    // Pinned articles do not count against the limit, so a saved article cannot be pushed out by news volume.
+    const keep = sorted.filter((a) => this.pinned.has(a.title));
+    const rest = sorted.filter((a) => !this.pinned.has(a.title)).slice(0, limit);
+    this.pool = [...keep, ...rest].sort((a, b) => b.published - a.published || b.seen - a.seen);
+    this.byId = new Map(this.pool.map((a) => [articleId(a), a]));
+    // Newest wins per title: iterate oldest to newest and let later entries overwrite.
+    this.byTitle = new Map();
+    for (let i = this.pool.length - 1; i >= 0; i--) this.byTitle.set(this.pool[i].title, this.pool[i]);
     this.fetchedAt = fetchedAt;
   }
 
+  private pin(title: string): void {
+    if (this.pinned.has(title)) this.pinned.delete(title); else this.dirty = true;
+    this.pinned.add(title);
+    const limit = this.cfg.pinLimit ?? 1000;
+    while (this.pinned.size > limit) this.pinned.delete(this.pinned.values().next().value!);
+  }
+
+  /** Write the cache now if pins changed since it was last written. */
+  flush(): void { if (this.dirty) this.writeCache(); }
+
+  private writeCache(): void {
+    this.dirty = false;
+    if (!this.cacheFile) return;
+    mkdirSync(dirname(this.cacheFile), { recursive: true });
+    // Write beside, then rename: a crash mid-write must not leave the only fallback truncated.
+    const tmp = `${this.cacheFile}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ fetchedAt: this.fetchedAt, articles: this.pool, pinned: [...this.pinned] } satisfies Snapshot));
+    renameSync(tmp, this.cacheFile);
+  }
+
   /**
-   * Fetch every feed once. A feed that fails keeps its previous articles
-   * and records the error; only when every feed fails and nothing was
-   * ever loaded does this throw. Returns the number of new articles.
+   * Fetch every feed once. After a refresh the pool holds: what the feeds
+   * list now; the previous articles of any feed that failed this time;
+   * and pinned articles (ones readers saved, followed from or left
+   * unfinished), which are kept but marked out of feed so they are no
+   * longer recommended. Everything else is dropped, so a retracted or
+   * rotated-out article leaves Top Stories and For You on the next
+   * refresh. Only when every feed fails and nothing was ever loaded does
+   * this throw. Returns the number of new articles.
    */
   async refresh(): Promise<number> {
     const now = this.now();
     const results = await Promise.allSettled(this.specs.map(async (spec) => ({ spec, feed: parseFeed(await this.fetchText(spec.url)) })));
     const fresh = new Map<string, PooledArticle>();
+    const failed = new Set<string>();
     let okCount = 0;
     results.forEach((r, i) => {
       const spec = this.specs[i];
-      if (r.status === 'rejected') { this.errors.set(spec.url, String((r.reason as Error)?.message ?? r.reason)); this.log(`content: ${spec.url}: ${this.errors.get(spec.url)}`); return; }
+      if (r.status === 'rejected') { failed.add(spec.url); this.errors.set(spec.url, String((r.reason as Error)?.message ?? r.reason)); this.log(`content: ${spec.url}: ${this.errors.get(spec.url)}`); return; }
       okCount++;
       this.errors.delete(spec.url);
       const { feed } = r.value;
       const source = spec.source ?? feed.title ?? new URL(spec.url).hostname;
       for (const it of feed.items) {
-        if (fresh.has(it.title)) continue;
-        const prev = this.byTitle.get(it.title);
-        fresh.set(it.title, {
+        const id = articleId(it);
+        if (fresh.has(id)) continue;
+        const prev = this.byId.get(id);
+        fresh.set(id, {
           title: it.title, dek: it.dek, body: it.body, url: it.url, source, author: it.author ?? source,
           published: it.published ?? prev?.published ?? now,
           topic: spec.topic ?? it.categories[0] ?? source,
           imageUrl: it.imageUrl ?? placeholder(it.title),
-          feedUrl: spec.url, seen: prev?.seen ?? now,
+          feedUrl: spec.url, seen: prev?.seen ?? now, inFeed: true,
         });
       }
     });
@@ -207,27 +289,35 @@ export class LiveContent implements ContentProvider {
       throw new Error(`no feed could be fetched: ${[...this.errors].map(([u, e]) => `${u}: ${e}`).join('; ')}`);
     }
     let added = 0;
-    for (const t of fresh.keys()) if (!this.byTitle.has(t)) added++;
-    // Fresh items win; everything older stays so saved and half-read articles outlive their feed.
-    const merged = new Map(this.byTitle);
-    for (const [t, a] of fresh) merged.set(t, a);
-    this.setPool([...merged.values()], now);
-    if (this.cacheFile) {
-      mkdirSync(dirname(this.cacheFile), { recursive: true });
-      writeFileSync(this.cacheFile, JSON.stringify({ fetchedAt: now, articles: this.pool } satisfies Snapshot));
+    for (const id of fresh.keys()) if (!this.byId.has(id)) added++;
+    const merged = new Map<string, PooledArticle>();
+    for (const a of this.pool) {
+      if (failed.has(a.feedUrl)) merged.set(articleId(a), a);
+      else if (this.pinned.has(a.title)) merged.set(articleId(a), { ...a, inFeed: false });
     }
+    for (const [id, a] of fresh) merged.set(id, a);
+    this.setPool([...merged.values()], now);
+    this.writeCache();
     this.log(`content: ${okCount}/${this.specs.length} feed(s), ${added} new, ${this.pool.length} in pool`);
     return added;
   }
 
-  /** Refresh on an interval. The timer never keeps the process alive. */
+  /** Refresh on an interval, and persist new pins within a minute. The timers never keep the process alive. */
   start(): void {
     const ms = (this.cfg.refreshMinutes ?? 30) * 60_000;
-    if (!(ms > 0)) return;
-    this.timer = setInterval(() => { this.refresh().catch((e) => this.log(`content: refresh failed: ${(e as Error).message}`)); }, ms);
-    this.timer.unref();
+    if (ms > 0) {
+      this.timer = setInterval(() => { this.refresh().catch((e) => this.log(`content: refresh failed: ${(e as Error).message}`)); }, ms);
+      this.timer.unref();
+    }
+    this.flushTimer = setInterval(() => this.flush(), 60_000);
+    this.flushTimer.unref();
   }
-  stop(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; }
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    if (this.flushTimer) clearInterval(this.flushTimer);
+    this.timer = this.flushTimer = undefined;
+    this.flush();
+  }
 
   topicOf(title: string): string | undefined { return this.byTitle.get(title)?.topic; }
 
@@ -242,8 +332,8 @@ export class LiveContent implements ContentProvider {
           case 'complete': completion.set(e.article, Math.max(completion.get(e.article) ?? 0, e.value)); break;
           case 'action':
             if (e.action === 'dismiss' && e.article) acts.dismissed.add(e.article);
-            if (e.action === 'save' && e.article) { acts.saved = acts.saved.filter((t) => t !== e.article); acts.saved.push(e.article); }
-            if (e.action === 'follow' && e.article) { const src = this.byTitle.get(e.article)?.source; if (src) acts.followedSources.add(src); }
+            if (e.action === 'save' && e.article) { acts.saved = acts.saved.filter((t) => t !== e.article); acts.saved.push(e.article); this.pin(e.article); }
+            if (e.action === 'follow' && e.article) { const src = this.byTitle.get(e.article)?.source; if (src) acts.followedSources.add(src); this.pin(e.article); }
             break;
         }
       }
@@ -251,7 +341,7 @@ export class LiveContent implements ContentProvider {
         const topic = this.byTitle.get(t)?.topic;
         if (topic) acts.topicOpens.set(topic, (acts.topicOpens.get(topic) ?? 0) + 1);
         acts.unfinished = acts.unfinished.filter((u) => u !== t);
-        if ((completion.get(t) ?? 0) < 0.9) acts.unfinished.push(t);
+        if ((completion.get(t) ?? 0) < 0.9) { acts.unfinished.push(t); this.pin(t); }
       }
     }
     return acts;
@@ -264,7 +354,9 @@ export class LiveContent implements ContentProvider {
   forUser(history: SessionRecord[]): FeedData {
     const now = this.now();
     const acts = this.actionsOf(history);
-    const live = this.pool.filter((a) => !acts.dismissed.has(a.title));
+    // Recommendations come from what the feeds list now, one card per title.
+    const titles = new Set<string>();
+    const live = this.pool.filter((a) => a.inFeed && !acts.dismissed.has(a.title) && this.byTitle.get(a.title) === a && !titles.has(a.title) && titles.add(a.title));
     const perFeed = this.cfg.perFeed ?? 40;
 
     // Newest per source, then round-robin across sources.

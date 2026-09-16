@@ -274,6 +274,9 @@ export function createServer(opts: ServerOptions): Server {
   if (token !== undefined && token.length < 16) throw new Error('token must be at least 16 characters');
   const content = opts.content ?? staticContent();
   const topicOf = (title: string) => content.topicOf(title);
+  // Show a live provider every known reader's history once, so the articles
+  // they saved or left unfinished are pinned before a refresh could drop them.
+  for (const u of store.users()) content.forUser(store.sessions(u));
   // Failed authentications per address, sliding hour. An address over the
   // cap is refused before its credentials are looked at, so guessing past
   // the cap cannot succeed. Stale addresses are evicted; the map is bounded.

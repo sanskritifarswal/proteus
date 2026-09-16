@@ -167,14 +167,36 @@ const BTN = 'sections[0].content.item.actions[0]';
   try { await new LiveContent({ config, fetchText: async () => { throw new Error('offline'); } }).refresh(); } catch (e) { threw = (e as Error).message; }
   report(threw.startsWith('no feed could be fetched'), `with nothing cached and nothing fetched, refresh throws (${threw.slice(0, 40)}…)`);
 
-  // A changed feed: an item drops out of the feed but stays in the pool for the saved list; a new item is added.
-  const rss2 = RSS.replace(/<item>\s*<title>Housing market stalls[\s\S]*?<\/item>/, '<item><title>Transit cards go contactless</title><link>https://ledger.example/transit</link><description>Tap to ride.</description><pubDate>Tue, 15 Sep 2026 09:30:00 GMT</pubDate></item>');
+  // A changed feed: the saved item drops out of its feed but stays in the pool
+  // (pinned) without being recommended; an unpinned dropped item goes; a new
+  // item is added. Pins made since the last refresh reach the cache via flush.
+  live.flush();
+  report((JSON.parse(readFileSync(cache, 'utf8')) as { pinned: string[] }).pinned.includes('Housing market stalls'), 'flush persists the pins a reader created since the last refresh');
+  const rss2 = RSS
+    .replace(/<item>\s*<title>Housing market stalls[\s\S]*?<\/item>/, '<item><title>Transit cards go contactless</title><link>https://ledger.example/transit</link><description>Tap to ride.</description><pubDate>Tue, 15 Sep 2026 09:30:00 GMT</pubDate></item>')
+    .replace(/<item>\s*<title><!\[CDATA\[Council approves[\s\S]*?<\/item>/, '');
   const live2 = new LiveContent({ config, cacheFile: cache, fetchText: async (u) => (u.includes('ledger') ? rss2 : fetchOk(u)), now: () => NOW + 60_000 });
   const added3 = await live2.refresh();
   const after = live2.forUser(history);
-  report(added3 === 1 && live2.size === 5 && after.feeds.saved.articles[0]?.title === 'Housing market stalls' && after.feeds.topStories.articles[0].title === 'Transit cards go contactless', 'refresh merges: the new item leads, the saved item outlives its feed');
+  const topAfter = after.feeds.topStories.articles.map((a) => a.title);
+  report(added3 === 1 && live2.size === 4 && after.feeds.saved.articles[0]?.title === 'Housing market stalls' && topAfter[0] === 'Transit cards go contactless' && !topAfter.includes('Housing market stalls') && live2.topicOf('Council approves bike lanes & more') === undefined, `refresh: the new item leads; the saved item outlives its feed but is no longer recommended; the unpinned dropped item is gone (pool ${live2.size})`);
   const snap = JSON.parse(readFileSync(cache, 'utf8')) as { articles: unknown[] };
-  report(snap.articles.length === 5, 'the cache holds the merged pool');
+  report(snap.articles.length === 4 && !existsSync(`${cache}.${process.pid}.tmp`), 'the cache holds the new pool and was written atomically');
+
+  // Titles are not unique across feeds or time: one card per title, resolving to the newest.
+  const dupAtom = ATOM.replace('<title>Why your sleep tracker is wrong</title>', '<title>Housing market stalls</title>').replace('2026-09-14T20:00:00Z', '2026-09-15T09:00:00Z');
+  const dup = new LiveContent({ config, fetchText: async (u) => (u.includes('ledger') ? RSS : dupAtom), now: () => NOW });
+  await dup.refresh();
+  const dupTop = dup.forUser([]).feeds.topStories.articles.filter((a) => a.title === 'Housing market stalls');
+  report(dup.size === 4 && dupTop.length === 1 && dupTop[0].source === 'Wired' && dup.topicOf('Housing market stalls') === 'Wired', `two feeds with one headline: both pooled (${dup.size}), served once, resolving to the newer (${dupTop[0]?.source})`);
+
+  // The fetcher refuses oversized bodies, declared or streamed.
+  const { makeHttpFetch } = await import('./content/content.ts');
+  const bigDeclared = makeHttpFetch({ maxBytes: 100, fetchImpl: (async () => new Response('x', { headers: { 'content-length': '1000' } })) as unknown as typeof fetch });
+  const bigStreamed = makeHttpFetch({ maxBytes: 100, fetchImpl: (async () => new Response('y'.repeat(1000))) as unknown as typeof fetch });
+  const small = makeHttpFetch({ maxBytes: 100, fetchImpl: (async () => new Response('<rss/>')) as unknown as typeof fetch });
+  const msgOf = async (f: () => Promise<string>) => { try { await f(); return ''; } catch (e) { return (e as Error).message; } };
+  report((await msgOf(() => bigDeclared('u'))).includes('too large') && (await msgOf(() => bigStreamed('u'))).includes('too large') && (await small('u')) === '<rss/>', 'fetcher: bodies over the byte cap are refused by declared length and while streaming; small ones pass');
   report((() => { try { new LiveContent({ config: { feeds: [] } }); return false; } catch { return true; } })() && (() => { try { new LiveContent({ config: { feeds: ['ftp://x'] } }); return false; } catch { return true; } })(), 'config validation: feeds required, http(s) only');
 }
 

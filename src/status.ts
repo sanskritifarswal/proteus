@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { SessionRecord } from './events.ts';
 import { sessionReward } from './reward.ts';
 import { compareSessions, metricsOf, METRICS, type Metric } from './real/compare.ts';
@@ -155,14 +156,19 @@ export class StatusReporter {
 
   private simulate(all: SessionRecord[], recent: number, now: () => number): Status['sim'] {
     if (!all.length) return null;
-    // Most recent by end time, falling back to store order; then keep a stable identity for the cache.
-    const ordered = all.map((s, i) => ({ s, i, t: endedAt(s) ?? -1 })).sort((a, b) => b.t - a.t || b.i - a.i).slice(0, Math.max(1, recent)).map((x) => x.s);
-    const key = ordered.map((s) => `${s.user}:${s.session}:${s.events.length}:${s.returned}`).join('|');
+    // The most recent sessions by end time (store order as the tie-break) are
+    // the targets; every session still feeds its reader's history in the
+    // comparison. The cache identity covers the content of every session, since
+    // the store can replace a record with one of equal length.
+    const targets = new Set(all.map((s, i) => ({ s, i, t: endedAt(s) ?? -1 })).sort((a, b) => b.t - a.t || b.i - a.i).slice(0, Math.max(1, recent)).map((x) => x.s));
+    const digest = createHash('sha256');
+    for (const s of all) digest.update(`${s.user}:${s.session}:${s.returned}:${targets.has(s) ? 1 : 0}:${s.startedAt ?? ''}:`).update(JSON.stringify(s.tree)).update(JSON.stringify(s.events)).update('\n');
+    const key = digest.digest('hex');
     if (this.simCache?.key === key) return this.simCache.value;
     const simUsers = this.opts.simUsers ?? 50;
     const t0 = now();
-    const { meanZ, meanAbsZ } = compareSessions(ordered, simUsers, 1, this.opts.content);
-    const value: Status['sim'] = { sessions: ordered.length, simUsers, meanZ, meanAbsZ, computedAt: new Date(now()).toISOString(), ms: now() - t0 };
+    const { meanZ, meanAbsZ } = compareSessions(all, simUsers, 1, this.opts.content, (s) => targets.has(s));
+    const value: Status['sim'] = { sessions: targets.size, simUsers, meanZ, meanAbsZ, computedAt: new Date(now()).toISOString(), ms: now() - t0 };
     this.simCache = { key, value };
     return value;
   }

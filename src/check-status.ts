@@ -7,6 +7,8 @@ import { createRecorder } from './client/recorder.ts';
 import type { UIDocument } from './tree.ts';
 import type { Status } from './status.ts';
 import { train } from './policy/train.ts';
+import { compareSessions } from './real/compare.ts';
+import type { SessionRecord } from './events.ts';
 
 /**
  * The status page, in-process: totals and per-reader rows from posted
@@ -29,7 +31,7 @@ async function withServer<T>(token: string | undefined, fn: (base: string) => Pr
   try { return await fn(base); } finally { await new Promise<void>((r) => server.close(() => r())); }
 }
 
-async function postSession(base: string, user: string, session: number, opens: number, startedAt: string, k = ''): Promise<void> {
+async function postSession(base: string, user: string, session: number, opens: number, startedAt: string, k = '', completion = 0.8, dwellMs = 30_000): Promise<void> {
   const page = await (await fetch(`${base}/u/${user}${k}`)).text();
   const tree = JSON.parse(/<script type="application\/json" id="proteus-tree">(.*?)<\/script>/s.exec(page)![1].replace(/\\u003c/g, '<'));
   const cards = [...page.matchAll(/data-path="([^"]+)" data-article="([^"]+)"/g)].map((m) => ({ path: m[1], article: m[2].replace(/&amp;/g, '&') }));
@@ -38,7 +40,7 @@ async function postSession(base: string, user: string, session: number, opens: n
   for (let i = 0; i < Math.min(opens, cards.length); i++) {
     clock += 500; rec.impression(cards[i].path, cards[i].article);
     clock += 500; rec.open(cards[i].path, cards[i].article);
-    clock += 30_000; rec.close(0.8);
+    clock += dwellMs; rec.close(completion);
   }
   clock += 1000; rec.end();
   const r = await fetch(`${base}/events${k}`, { method: 'POST', body: JSON.stringify(rec.record()) });
@@ -74,11 +76,36 @@ await withServer(undefined, async (base) => {
   const after = await (await fetch(`${base}/status.json`)).json() as Status;
   report(after.sim?.sessions === 4 && after.sim.computedAt !== s.sim?.computedAt && after.users[0].user === 'bob', 'a new session invalidates the cache and moves that reader to the top');
 
+  // A replacement of equal length (same events, longer session, so the later
+  // session_end wins) changes the gap's cache identity even though the count did not.
+  const before = after.totals.completionPerSession;
+  await postSession(base, 'bob', 1, 1, '2026-09-16T20:00:00Z', '', 0.2, 60_000);
+  const replaced = await (await fetch(`${base}/status.json`)).json() as Status;
+  report(replaced.totals.sessions === 4 && replaced.totals.completionPerSession !== before && replaced.sim?.computedAt !== after.sim?.computedAt, 'an equal-length replacement record changes the totals and recomputes the gap');
+  const badStart = await fetch(`${base}/events`, { method: 'POST', body: JSON.stringify({ user: 'eve', session: 0, grammar: doc.grammar, tree: doc.tree, startedAt: 123, events: [{ t: 0, type: 'session_end', path: '' }], returned: null }) });
+  const badStartBody = await badStart.json() as { errors?: string[] };
+  report(badStart.status === 400 && (badStartBody.errors ?? []).some((e) => e.includes('startedAt')), `a record whose startedAt is not an ISO string is rejected (${badStartBody.errors?.[0]})`);
+
   const html = await (await fetch(`${base}/status`)).text();
   report(html.includes('<title>Proteus status</title>') && html.includes('>alice<') && html.includes('>bob<') && html.includes('Reward by session index') && html.includes('mean z') && html.includes('href="/u/alice"'), 'the HTML page carries readers, the curve, the gap table, and links to each reader\'s screen');
   const index = await (await fetch(`${base}/`)).text();
   report(index.includes('href="/status"'), 'the index links to the status page');
 });
+
+// Restricting the gap to recent sessions must not restrict the history they are simulated with.
+{
+  const tree = doc.tree;
+  const paths = [...JSON.stringify(tree).matchAll(/"type":"Card"/g)].length;
+  const mk = (session: number, opened: string[]): SessionRecord => ({
+    user: 'h', session, grammar: doc.grammar, tree, returned: session === 0 ? true : null,
+    events: [...opened.flatMap((a, i) => [{ t: i * 1000, type: 'impression' as const, path: 'sections[0].content.item', article: a }, { t: i * 1000 + 100, type: 'open' as const, path: 'sections[0].content.item', article: a }, { t: i * 1000 + 900, type: 'dwell' as const, path: 'sections[0].content.item', article: a, value: 800 }, { t: i * 1000 + 900, type: 'complete' as const, path: 'sections[0].content.item', article: a, value: 1 }]), { t: 5000, type: 'session_end' as const, path: '' }],
+  });
+  const titles = ['City council approves new bike lane network', 'Why the housing market stalled this quarter', 'A field guide to the season\'s best trail runs', 'Inside the lab racing to make cheaper batteries', 'The quiet return of the neighbourhood bookshop'];
+  const s0 = mk(0, titles), s1 = mk(1, []);
+  const withHistory = compareSessions([s0, s1], 100, 3, undefined, (s) => s.session === 1);
+  const truncated = compareSessions([s1], 100, 3);
+  report(paths > 0 && withHistory.perSession.length === 1 && withHistory.perSession[0].session === 1 && withHistory.perSession[0].simMean.opens < truncated.perSession[0].simMean.opens, `compareSessions with a target filter reports one session but simulates it as a second session: ${withHistory.perSession[0].simMean.opens.toFixed(2)} simulated opens with history vs ${truncated.perSession[0].simMean.opens.toFixed(2)} without`);
+}
 
 await withServer('0123456789abcdef0123', async (base) => {
   const noAuth = await fetch(`${base}/status`);

@@ -54,7 +54,13 @@ export interface Comparison {
  * sessions are already "seen" (the simulator opens seen articles less), and
  * the session index matches. Records are grouped by user and ordered.
  */
-export function compareSessions(records: SessionRecord[], usersPerTree = 200, seed = 1, content: ContentProvider = staticContent(fakeData)): { perSession: Comparison[]; meanAbsZ: Record<Metric, number>; meanZ: Record<Metric, number> } {
+/**
+ * `only`, when given, restricts which sessions are simulated and reported;
+ * every session still builds its reader's history (seen articles, session
+ * count, personal feeds), so a reader's Nth session is compared as an Nth
+ * session even when only recent ones are wanted.
+ */
+export function compareSessions(records: SessionRecord[], usersPerTree = 200, seed = 1, content: ContentProvider = staticContent(fakeData), only?: (s: SessionRecord) => boolean): { perSession: Comparison[]; meanAbsZ: Record<Metric, number>; meanZ: Record<Metric, number> } {
   if (!Number.isInteger(usersPerTree) || usersPerTree < 2) throw new Error(`usersPerTree must be an integer >= 2 (got ${usersPerTree})`);
   const perSession: Comparison[] = [];
   const byUser = new Map<string, SessionRecord[]>();
@@ -63,6 +69,7 @@ export function compareSessions(records: SessionRecord[], usersPerTree = 200, se
     list.sort((a, b) => a.session - b.session);
     const seen = new Set<string>();
     list.forEach((rec, idx) => {
+      if (only && !only(rec)) { for (const e of rec.events) if (e.type === 'open') seen.add(e.article); return; }
       const pop = makePopulation(usersPerTree, makeRng(seed));
       // The feeds as this user would have had them: personal sections come from their earlier sessions.
       const data = content.forUser(list.slice(0, idx));

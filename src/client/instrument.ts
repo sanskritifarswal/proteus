@@ -94,10 +94,23 @@ declare function createRecorder(opts: { user: string; session: number; grammar: 
     reader.querySelector('h1')!.textContent = card.dataset.article!;
     reader.querySelector('.proteus-meta')!.textContent = card.dataset.meta ?? '';
     // Content goes in as text, never as markup: article text is data.
+    // A real article arrives as paragraphs separated by blank lines; the fake
+    // data has one line, repeated so there is something to scroll.
     const body = card.dataset.body ?? '';
     const bodyEl = reader.querySelector('.proteus-body')!;
     bodyEl.textContent = '';
-    for (let i = 0; i < 8; i++) { const para = document.createElement('p'); para.textContent = body; bodyEl.appendChild(para); }
+    const paras = body.split('\n\n').filter((s) => s.trim().length > 0);
+    const repeat = paras.length <= 1 && !card.dataset.url ? 8 : 1;
+    for (let i = 0; i < repeat; i++) for (const text of paras) { const para = document.createElement('p'); para.textContent = text; bodyEl.appendChild(para); }
+    if (card.dataset.url && /^https?:\/\//.test(card.dataset.url)) {
+      const link = document.createElement('a');
+      link.className = 'proteus-source';
+      link.href = card.dataset.url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = 'Read the original';
+      bodyEl.appendChild(link);
+    }
     maxFraction = 0;
     inner.scrollTop = 0;
     reader.hidden = false;

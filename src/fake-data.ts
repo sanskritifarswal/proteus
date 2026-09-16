@@ -12,6 +12,10 @@ export interface Article {
   readTime: string;
   topic: string;
   imageUrl: string;
+  /** Full plain text for the reader, paragraphs separated by blank lines. Falls back to the dek. */
+  body?: string;
+  /** Where the article lives, when it has a home outside the reader. */
+  url?: string;
 }
 
 export interface Feed {

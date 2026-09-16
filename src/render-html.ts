@@ -71,6 +71,8 @@ function renderNode(n: UINode, path: string, ctx: Ctx, data: FeedData): string {
       const item = one(s.item)!;
       const articles = feed.articles.slice(0, limit);
       const parts: string[] = [];
+      // A personal feed can be empty for a real user. Say so rather than pad it.
+      if (articles.length === 0) parts.push(`<p class="empty">${esc(data.strings['empty'] ?? 'Nothing here yet.')}</p>`);
       articles.forEach((a, i) => {
         const actx: Ctx = { ...ctx, article: a };
         if (i === 0 && lead) parts.push(renderNode(lead, sub(path, 'lead'), actx, data));
@@ -87,7 +89,9 @@ function renderNode(n: UINode, path: string, ctx: Ctx, data: FeedData): string {
       const a = ctx.article!;
       // The article identity and enough content for the reader overlay, so
       // instrumentation can name what was opened and show something to read.
-      return `<article class="card variant-${esc(p.variant)}" data-path="${esc(path)}" data-article="${esc(a.title)}" data-meta="${esc(`${a.source} · ${a.author} · ${a.readTime}`)}" data-body="${esc(a.dek)}">` +
+      // Live feeds often carry no author, in which case it is the source.
+      const metaLine = [a.source, a.author !== a.source ? a.author : '', a.readTime].filter(Boolean).join(' · ');
+      return `<article class="card variant-${esc(p.variant)}" data-path="${esc(path)}" data-article="${esc(a.title)}" data-meta="${esc(metaLine)}" data-body="${esc(a.body ?? a.dek)}"${a.url ? ` data-url="${esc(a.url)}"` : ''}>` +
         (media ? renderNode(media, sub(path, 'media'), ctx, data) : '') +
         `<div class="card-body">` +
         renderNode(title, sub(path, 'title'), ctx, data) +
@@ -137,6 +141,7 @@ export const screenCss = `
 .collection.layout-carousel .card { flex: 0 0 220px; }
 .collection.layout-grid { display: grid; grid-template-columns: 1fr 1fr; }
 .card { display: flex; flex-direction: column; gap: 6px; }
+.collection .empty { margin: 0; padding: var(--pad); color: #777; font-size: var(--fs); background: #f4f4f6; border-radius: 6px; }
 .card.variant-hero { border-radius: 10px; overflow: hidden; }
 .card.variant-hero .image { width: 100%; }
 .card.variant-hero .text.role-title { font-size: 20px; font-weight: 700; }
@@ -188,6 +193,7 @@ export const readerCss = `
 .proteus-reader-inner { background: #fff; color: #111; width: min(560px, 92vw); max-height: 80vh; overflow-y: auto; padding: 20px 24px; border-radius: 12px; font-family: -apple-system, system-ui, sans-serif; line-height: 1.5; }
 .proteus-reader-inner h1 { font-size: 22px; margin: 8px 0; }
 .proteus-meta { color: #666; font-size: 13px; margin: 0 0 12px; }
+.proteus-source { display: inline-block; margin-top: 8px; font-size: 14px; }
 .proteus-close { float: right; font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid #ccc; background: #f6f6f6; }
 .card.opened .text.role-title { color: #555; }
 .card.dismissed { opacity: .35; }

@@ -1,13 +1,13 @@
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { createHash, createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { UIDocument } from './tree.ts';
 import type { SessionRecord } from './events.ts';
 import { makeRng } from './rng.ts';
 import { localUniform, sample, type Decision, type Policy } from './sample.ts';
 import { newsfeed } from './grammars/newsfeed.ts';
-import { fakeData } from './fake-data.ts';
+import { LiveContent, loadContentConfig, staticContent, type ContentProvider } from './content/content.ts';
 import { renderPage } from './render-html.ts';
 import { sessionReward } from './reward.ts';
 import { stateFromHistory, STATE_NAMES } from './policy/features.ts';
@@ -87,6 +87,12 @@ export interface ServerOptions {
    * per-server counter, so a run is repeatable.
    */
   seed?: number;
+  /**
+   * What fills the screen's feeds for each user. Default: the fake data,
+   * the same for everyone. Live syndicated content with personal feeds
+   * derived from the user's actions: see src/content/content.ts.
+   */
+  content?: ContentProvider;
 }
 
 /** Identity of a served tree, so a posted record can be matched to the trace of the screen it came from. */
@@ -111,9 +117,6 @@ export interface StoredTrace {
   }>;
 }
 
-const topicByTitle = new Map<string, string>();
-for (const feed of Object.values(fakeData.feeds)) for (const a of feed.articles) topicByTitle.set(a.title, a.topic);
-const topicOf = (t: string) => topicByTitle.get(t);
 
 export class SessionStore {
   private readonly current = new Map<string, ExportedRecord>();
@@ -217,7 +220,7 @@ export function loadPolicyFile(file: string): PolicyModel {
   return json.model === 'mlp' ? MlpPolicy.fromJSON(json) : LinearPolicy.fromJSON(json);
 }
 
-export function nextScreen(store: SessionStore, user: string, policy: ServerOptions['policy'], epsilon = 0, seed?: number): { doc: UIDocument; session: number; how: string; trace?: StoredTrace } {
+export function nextScreen(store: SessionStore, user: string, policy: ServerOptions['policy'], epsilon = 0, seed?: number, topicOf?: (title: string) => string | undefined): { doc: UIDocument; session: number; how: string; trace?: StoredTrace } {
   const history = store.sessions(user);
   const rewards = history.map((s) => sessionReward(s));
   const session = history.length ? history[history.length - 1].session + 1 : 0;
@@ -269,6 +272,11 @@ export function createServer(opts: ServerOptions): Server {
   const max = opts.maxBodyBytes ?? 1_000_000;
   const token = opts.token;
   if (token !== undefined && token.length < 16) throw new Error('token must be at least 16 characters');
+  const content = opts.content ?? staticContent();
+  const topicOf = (title: string) => content.topicOf(title);
+  // Show a live provider every known reader's history once, so the articles
+  // they saved or left unfinished are pinned before a refresh could drop them.
+  for (const u of store.users()) content.forUser(store.sessions(u));
   // Failed authentications per address, sliding hour. An address over the
   // cap is refused before its credentials are looked at, so guessing past
   // the cap cannot succeed. Stale addresses are evicted; the map is bounded.
@@ -377,10 +385,10 @@ export function createServer(opts: ServerOptions): Server {
           if (store.postedUsers() >= (opts.maxUsers ?? 10_000)) return send(res, 429, JSON.stringify({ ok: false, errors: ['user limit reached'] }));
           if (!allowNewUser(req.socket.remoteAddress ?? 'unknown')) return send(res, 429, JSON.stringify({ ok: false, errors: ['too many new users from this address; try later'] }));
         }
-        const { doc, session, trace } = nextScreen(store, user, opts.policy, opts.epsilon ?? 0, serveSeed());
+        const { doc, session, trace } = nextScreen(store, user, opts.policy, opts.epsilon ?? 0, serveSeed(), topicOf);
         if (trace) store.putTrace(trace);
         const endpoint = token ? `/events?k=${signUser(token, user)}` : '/events';
-        return send(res, 200, renderPage(doc, fakeData, { user, session, endpoint }), 'text/html');
+        return send(res, 200, renderPage(doc, content.forUser(history), { user, session, endpoint }), 'text/html');
       }
       if (m && m[1] === 'sessions') {
         if (!isOperator(req)) return deny(401, 'operator token required');
@@ -424,7 +432,7 @@ export function createServer(opts: ServerOptions): Server {
   return server;
 }
 
-if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
+if (process.argv[1] && basename(process.argv[1]) === 'server.ts') {
   const args = process.argv.slice(2);
   const opt = (name: string, dflt: string) => { const i = args.indexOf(`--${name}`); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : dflt; };
   const port = Number(opt('port', '8787'));
@@ -438,7 +446,8 @@ if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
   const epsilon = Number(opt('epsilon', '0.1'));
   const token = opt('token', process.env.PROTEUS_TOKEN ?? '') || undefined;
   const trustProxy = args.includes('--trust-proxy');
-  if (!Number.isInteger(port) || port < 1 || port > 65535 || !host || !(epsilon >= 0 && epsilon < 1)) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json] [--epsilon [0,1)=0.1] [--token <secret> | PROTEUS_TOKEN] [--trust-proxy]'); process.exit(2); }
+  const contentFile = opt('content', '') || undefined;
+  if (!Number.isInteger(port) || port < 1 || port > 65535 || !host || !(epsilon >= 0 && epsilon < 1)) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json] [--epsilon [0,1)=0.1] [--token <secret> | PROTEUS_TOKEN] [--trust-proxy] [--content content.json]'); process.exit(2); }
   try { assertExposable(host, token); } catch (e) { console.error((e as Error).message); process.exit(2); }
   if (token && token.length < 16) { console.error('token must be at least 16 characters'); process.exit(2); }
   let policy: ServerOptions['policy'];
@@ -451,5 +460,14 @@ if (process.argv[1] && process.argv[1].endsWith('server.ts')) {
     if (!existsSync(f)) { console.error(`unknown policy '${policyName}'`); process.exit(2); }
     policy = JSON.parse(readFileSync(f, 'utf8')) as UIDocument;
   }
-  createServer({ store, policy, epsilon, token, trustProxy }).listen(port, host, () => console.log(`proteus serving on http://${host}:${port} (store ${store}, policy ${policyName}${policyName === 'trained' ? `, epsilon ${epsilon}` : ''}, ${token ? 'token set: operator routes need a bearer token, user links are signed' : 'no token: open, loopback only'})`));
+  let content: ContentProvider | undefined;
+  if (contentFile) {
+    // Live content: fetch once before listening so the first screen is real,
+    // then keep refreshing. The last good snapshot is cached in the store.
+    const live = new LiveContent({ config: loadContentConfig(contentFile), cacheFile: join(store, 'content.json'), log: (m) => console.log(m) });
+    try { await live.refresh(); } catch (e) { console.error((e as Error).message); process.exit(1); }
+    live.start();
+    content = live;
+  }
+  createServer({ store, policy, epsilon, token, trustProxy, content }).listen(port, host, () => console.log(`proteus serving on http://${host}:${port} (store ${store}, policy ${policyName}${policyName === 'trained' ? `, epsilon ${epsilon}` : ''}, ${token ? 'token set: operator routes need a bearer token, user links are signed' : 'no token: open, loopback only'}, content ${contentFile ? `live from ${contentFile}` : 'fake'})`));
 }

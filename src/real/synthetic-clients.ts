@@ -1,4 +1,5 @@
 import { makeRng } from '../rng.ts';
+import { basename } from 'node:path';
 import { fakeData } from '../fake-data.ts';
 import { makePopulation } from '../sim/users.ts';
 import { simulateSession, type SimState } from '../sim/simulate.ts';
@@ -43,7 +44,7 @@ export async function runSyntheticClients(opts: ClientsOptions): Promise<{ users
   return { users: pop.length, sessions, rejected };
 }
 
-if (process.argv[1] && process.argv[1].endsWith('synthetic-clients.ts')) {
+if (process.argv[1] && basename(process.argv[1]) === 'synthetic-clients.ts') {
   const args = process.argv.slice(2);
   const opt = (name: string, dflt: string) => { const i = args.indexOf(`--${name}`); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : dflt; };
   const users = Number(opt('users', '50')), sessions = Number(opt('sessions', '5')), seed = Number(opt('seed', '1'));

@@ -1,5 +1,5 @@
 import { readFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { basename, dirname } from 'node:path';
 import type { SessionRecord, UIEvent } from './events.ts';
 import { nodePaths, type UINode } from './tree.ts';
 import { sessionReward } from './reward.ts';
@@ -93,7 +93,7 @@ export function assemble(records: ExportedRecord[]): Map<string, SessionRecord[]
 const topicByTitle = new Map<string, string>();
 for (const feed of Object.values(fakeData.feeds)) for (const a of feed.articles) topicByTitle.set(a.title, a.topic);
 
-if (process.argv[1] && process.argv[1].endsWith('collect.ts')) {
+if (process.argv[1] && basename(process.argv[1]) === 'collect.ts') {
   const args = process.argv.slice(2);
   const opt = (name: string) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };
   const file = opt('file') ?? 'out/sessions.jsonl';

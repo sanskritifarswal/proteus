@@ -4,7 +4,7 @@ Generative UI framework. Developers define UI components at compile time as a ty
 (components, slots, valid slot types); at runtime a model assembles a personalised UI from that
 grammar. Currently at step one: getting the grammar right.
 
-Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/sampler.md) for the decision interface, [docs/gallery.md](docs/gallery.md) for the look-and-fix loop, [docs/simulator.md](docs/simulator.md) for events, reward and synthetic users, [docs/policy.md](docs/policy.md) for the learned policy, [docs/instrumentation.md](docs/instrumentation.md) for real sessions in the simulator's format, and [docs/real.md](docs/real.md) for training on them and measuring the sim-to-real gap.
+Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/sampler.md) for the decision interface, [docs/gallery.md](docs/gallery.md) for the look-and-fix loop, [docs/simulator.md](docs/simulator.md) for events, reward and synthetic users, [docs/policy.md](docs/policy.md) for the learned policy, [docs/instrumentation.md](docs/instrumentation.md) for real sessions in the simulator's format, [docs/real.md](docs/real.md) for training on them and measuring the sim-to-real gap, and [docs/content.md](docs/content.md) for serving real articles from syndication feeds.
 
 ## Layout
 
@@ -34,6 +34,8 @@ Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/s
 | `src/server.ts` | Local server: serves each user's next screen, receives the page's beacons, exports sessions |
 | `src/check-server.ts` | Server checks (in-process, ephemeral port) |
 | `src/check-auth.ts` | Token, signed links, operator routes, exposure guard |
+| `src/content/` | Live content: RSS/Atom parser, article pool, personal feeds derived from a user's actions (see [docs/content.md](docs/content.md)) |
+| `src/check-content.ts` | Parser, pool, cache and served-page checks, offline on fixtures |
 | `src/real/` | Training from stored real sessions, the sim-to-real comparison, synthetic clients |
 | `src/check-real.ts` | Real-session pipeline checks (serve with exploration → clients → train-real → compare) |
 | `schema/newsfeed.schema.json`, `schema/newsfeed.grammar.json` | Generated; do not edit |

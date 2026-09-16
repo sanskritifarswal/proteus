@@ -108,6 +108,11 @@ to count authentication failures per forwarded client (first
 requests would lock out everyone. Set it only when the proxy overwrites
 that header.
 
+Hand out links with real articles behind them: `--content content.json`
+serves syndicated feeds instead of the fake data and fills Saved,
+Following and Continue Reading from what each reader actually did. See
+[docs/content.md](content.md).
+
 This is enough to hand links to a few dozen people you know. It is not a
 multi-tenant service: one secret, no accounts, no rate limiting beyond
 the failed-auth cut-off.

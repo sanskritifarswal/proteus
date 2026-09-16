@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import type { Decision } from '../sample.ts';
 import { sessionReward } from '../reward.ts';
 import { LinearPolicy } from '../policy/linear-policy.ts';
@@ -116,7 +117,7 @@ export function trainReal(opts: TrainRealOptions): TrainRealReport {
   return report;
 }
 
-if (process.argv[1] && process.argv[1].endsWith('train-real.ts')) {
+if (process.argv[1] && basename(process.argv[1]) === 'train-real.ts') {
   const args = process.argv.slice(2);
   const opt = (name: string, dflt: string) => { const i = args.indexOf(`--${name}`); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : dflt; };
   const store = opt('store', 'out/server');

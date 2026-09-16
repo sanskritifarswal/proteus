@@ -155,6 +155,12 @@ const BTN = 'sections[0].content.item.actions[0]';
   report(t('continueReading').join('|') === 'Open-source maps eat the industry', 'continueReading: opened and left at 30%, not the one read to the end');
   const later = [...history, session('u', 1, (rec) => { rec.impression(P, 'Open-source maps eat the industry'); rec.open(P, 'Open-source maps eat the industry'); rec.close(0.95); rec.action(BTN, 'save', 'Open-source maps eat the industry'); })];
   const m2 = live.forUser(later);
+  live.flush();
+  const pinsBefore = (JSON.parse(readFileSync(cache, 'utf8')) as { pinned: string[] }).pinned;
+  live.forUser([...later, session('u', 2, (rec) => { rec.action(BTN, 'save', 'Housing market stalls'); })]);
+  live.flush();
+  const pinsAfter = (JSON.parse(readFileSync(cache, 'utf8')) as { pinned: string[] }).pinned;
+  report(pinsBefore[0] === 'Housing market stalls' && pinsAfter[pinsAfter.length - 1] === 'Housing market stalls' && pinsAfter.length === pinsBefore.length, 'a re-pin (saving an already pinned article again) moves it to the newest end and reaches the cache');
   report(m2.feeds.continueReading.articles.length === 0 && m2.feeds.saved.articles.map((a) => a.title).join('|') === 'Open-source maps eat the industry|Housing market stalls', 'finishing an article removes it from continueReading; a later save comes first');
 
   // Cache: a restart with every feed down serves the snapshot; a refresh that fails everywhere keeps it.

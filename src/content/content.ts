@@ -229,8 +229,11 @@ export class LiveContent implements ContentProvider {
   }
 
   private pin(title: string): void {
-    if (this.pinned.has(title)) this.pinned.delete(title); else this.dirty = true;
+    // Re-pinning moves the title to the newest end, and that order decides
+    // eviction, so it must reach the cache like a new pin does.
+    this.pinned.delete(title);
     this.pinned.add(title);
+    this.dirty = true;
     const limit = this.cfg.pinLimit ?? 1000;
     while (this.pinned.size > limit) this.pinned.delete(this.pinned.values().next().value!);
   }

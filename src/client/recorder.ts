@@ -63,6 +63,23 @@ export interface Recorder {
   size(): number;
 }
 
+/**
+ * Fraction of an article read, from what the reader could have read.
+ * Bounded by how much of the body was ever on screen (`visibleFraction`,
+ * 1 when it fits without scrolling) and by the time spent against the
+ * time the text takes at a reading pace: a summary that fits on one
+ * screen is not read in a one-second glance, and a long piece scrolled to
+ * the end in ten seconds was skimmed, not read. `minMs` is the floor on
+ * expected time, so a two-line body still needs a look.
+ */
+export function completionOf(o: { words: number; dwellMs: number; visibleFraction: number; wpm?: number; minMs?: number }): number {
+  const wpm = o.wpm ?? 220;
+  const expectedMs = Math.max(o.minMs ?? 4000, (Math.max(0, o.words) / wpm) * 60_000);
+  const timeFraction = Math.max(0, o.dwellMs) / expectedMs;
+  const visible = Math.min(1, Math.max(0, o.visibleFraction));
+  return Math.min(1, visible, timeFraction);
+}
+
 export function createRecorder(opts: RecorderOptions): Recorder {
   const now = opts.now ?? (() => Date.now());
   const t0 = now();

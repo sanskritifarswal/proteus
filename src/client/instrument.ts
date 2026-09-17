@@ -8,8 +8,10 @@
  *
  *   impression   a card or footer at least half visible for 300 ms
  *   open         click on a card (not on a button in it): opens the reader
- *   dwell,       reader closed; complete = the furthest scroll fraction
- *   complete     reached in the reader
+ *   dwell,       reader closed; complete = fraction read, bounded by how
+ *   complete     much of the body was on screen and by time at reading pace
+ *                (completionOf in recorder.ts)
+ *   action read  the reader followed the link to the original article
  *   scroll_past  a card that had an impression left the viewport unopened
  *   action       click on a button
  *   session_end  page hidden or unloaded; the record is flushed to
@@ -17,6 +19,7 @@
  *
  * Everything the page collects is exposed as window.proteus for export.
  */
+declare function completionOf(o: { words: number; dwellMs: number; visibleFraction: number; wpm?: number; minMs?: number }): number;
 declare function createRecorder(opts: { user: string; session: number; grammar: string; tree: unknown }): {
   impression(path: string, article?: string): void;
   open(path: string, article: string): boolean;
@@ -62,17 +65,23 @@ declare function createRecorder(opts: { user: string; session: number; grammar: 
   reader.innerHTML = '<div class="proteus-reader-inner"><button class="proteus-close" type="button">Close</button><h1></h1><p class="proteus-meta"></p><div class="proteus-body"></div></div>';
   document.body.appendChild(reader);
   const inner = reader.querySelector<HTMLElement>('.proteus-reader-inner')!;
-  let maxFraction = 0;
+  // How much of the body has been on screen, and since when: completion is
+  // the smaller of that and the time spent against the text's reading time.
+  let visibleFraction = 0;
+  let openedAt = 0;
+  let words = 0;
   const onScroll = () => {
-    const denom = inner.scrollHeight - inner.clientHeight;
-    const f = denom <= 0 ? 1 : inner.scrollTop / denom;
-    if (f > maxFraction) maxFraction = f;
+    // No viewport (a background tab reports zero sizes): nothing to learn from this measurement.
+    if (inner.clientHeight <= 0) return;
+    const f = inner.scrollHeight <= 0 ? 1 : (inner.scrollTop + inner.clientHeight) / inner.scrollHeight;
+    if (f > visibleFraction) visibleFraction = f;
   };
   inner.addEventListener('scroll', onScroll);
   const closeReader = () => {
     if (reader.hidden) return;
     onScroll();
-    rec.close(maxFraction);
+    // Never measured (the reader was only ever open without a viewport): let time alone bound it.
+    rec.close(completionOf({ words, dwellMs: Date.now() - openedAt, visibleFraction: visibleFraction > 0 ? visibleFraction : 1 }));
     reader.hidden = true;
   };
   reader.querySelector('.proteus-close')!.addEventListener('click', closeReader);
@@ -109,11 +118,17 @@ declare function createRecorder(opts: { user: string; session: number; grammar: 
       link.target = '_blank';
       link.rel = 'noopener';
       link.textContent = 'Read the original';
+      // Following the link is an action on the card: the summary was worth more.
+      link.addEventListener('click', () => rec.action(card.dataset.path!, 'read', card.dataset.article));
       bodyEl.appendChild(link);
     }
-    maxFraction = 0;
+    words = paras.join(' ').split(/\s+/).filter((w) => w.length > 0).length * repeat;
+    visibleFraction = 0;
+    openedAt = Date.now();
     inner.scrollTop = 0;
     reader.hidden = false;
+    // The body is laid out now; a short one is entirely on screen already.
+    onScroll();
   });
 
   // Persist and (if configured) send. Going hidden flushes a snapshot but

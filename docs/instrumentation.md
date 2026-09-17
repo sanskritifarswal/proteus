@@ -131,8 +131,11 @@ paragraphs, so that definition saturated on open and carried no signal.
 
 Completion is now `completionOf` in `src/client/recorder.ts`, a pure
 function the client calls on close: the smaller of the fraction of the
-body that was ever on screen (1 when it fits) and dwell over the expected
-reading time, words at 220 words a minute with a 4 s floor. A one-second
+article body (not the reader's title, meta or close button) that was ever
+on screen (1 when it fits) and visible dwell over the expected reading
+time, words at 220 words a minute with a 4 s floor. Dwell here is time
+the page was visible with the reader open; the `dwell` event carries the
+same number. A one-second
 glance at a summary is a quarter read; a 2200-word piece scrolled to the
 end in five minutes is half read; half an hour on the first third of it is
 a third. The simulator already draws dwell as completion times reading
@@ -173,10 +176,10 @@ One session on the trained policy's screen, in the app's browser pane:
 ## Known limits
 
 - `complete` is bounded by time, not measured: a reader who stared at the
-  text for its reading time counts as having read it. Dwell keeps running
-  while the tab is hidden with the reader open, so a reader who switches
-  away and comes back is over-counted; pausing dwell on hide is the next
-  refinement.
+  text for its reading time counts as having read it. Time while the tab
+  is hidden with the reader open (another tab, the screen off, the
+  original article opened from the link) is excluded from both dwell and
+  completion.
 - Following "Read the original" is recorded as `action: read` on the card.
   The reward gives it no weight yet: what a click-through is worth is a
   calibration decision to make with real sessions, not a guess.

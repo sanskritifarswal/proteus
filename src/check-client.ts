@@ -26,6 +26,14 @@ report(completionOf({ words: 2200, dwellMs: 30 * 60_000, visibleFraction: 0.3 })
 report(completionOf({ words: 0, dwellMs: 10_000, visibleFraction: 1.4 }) === 1 && completionOf({ words: 100, dwellMs: -5, visibleFraction: 1 }) === 0, 'no words or an overscrolled fraction clamp to 1; negative dwell to 0');
 report(completionOf({ words: 440, dwellMs: 60_000, visibleFraction: 1, wpm: 440 }) === 1 && completionOf({ words: 440, dwellMs: 60_000, visibleFraction: 1 }) === 0.5, 'reading pace is a parameter (default 220 wpm)');
 
+{
+  let clock = 0;
+  const r = createRecorder({ user: 'u-dwell', session: 0, grammar: doc.grammar, tree: doc.tree, now: () => clock });
+  r.open('sections[0].content.item', 'A'); clock += 50_000; r.close(0.5, 12_000);
+  const dwell = r.snapshot().events.find((e) => e.type === 'dwell') as { value: number };
+  report(dwell.value === 12_000, 'close(fraction, dwellMs) records the given visible time rather than wall-clock time since open');
+}
+
 const rec = createRecorder({ user: 'u-test', session: 0, grammar: doc.grammar, tree: doc.tree, now });
 const item = 'sections[0].content.item';
 const lead = 'sections[0].content.lead';

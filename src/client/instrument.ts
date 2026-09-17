@@ -23,7 +23,7 @@ declare function completionOf(o: { words: number; dwellMs: number; visibleFracti
 declare function createRecorder(opts: { user: string; session: number; grammar: string; tree: unknown }): {
   impression(path: string, article?: string): void;
   open(path: string, article: string): boolean;
-  close(fractionRead: number): void;
+  close(fractionRead: number, dwellMs?: number): void;
   scrollPast(path: string, article: string): void;
   action(path: string, action: string, article?: string): void;
   end(): void;
@@ -65,25 +65,40 @@ declare function createRecorder(opts: { user: string; session: number; grammar: 
   reader.innerHTML = '<div class="proteus-reader-inner"><button class="proteus-close" type="button">Close</button><h1></h1><p class="proteus-meta"></p><div class="proteus-body"></div></div>';
   document.body.appendChild(reader);
   const inner = reader.querySelector<HTMLElement>('.proteus-reader-inner')!;
-  // How much of the body has been on screen, and since when: completion is
-  // the smaller of that and the time spent against the text's reading time.
+  // How much of the article body (not the reader's title, meta or close
+  // button) has been on screen, and how long the page was visible with the
+  // reader open: completion is the smaller of that fraction and the visible
+  // time against the text's reading time.
+  const bodyEl = reader.querySelector<HTMLElement>('.proteus-body')!;
   let visibleFraction = 0;
-  let openedAt = 0;
   let words = 0;
+  let activeMs = 0;
+  let segmentStart = 0;
   const onScroll = () => {
+    const frame = inner.getBoundingClientRect();
+    const body = bodyEl.getBoundingClientRect();
     // No viewport (a background tab reports zero sizes): nothing to learn from this measurement.
-    if (inner.clientHeight <= 0) return;
-    const f = inner.scrollHeight <= 0 ? 1 : (inner.scrollTop + inner.clientHeight) / inner.scrollHeight;
-    if (f > visibleFraction) visibleFraction = f;
+    if (frame.height <= 0 || body.height <= 0) return;
+    const f = (frame.bottom - body.top) / body.height;
+    if (f > visibleFraction) visibleFraction = Math.min(1, f);
   };
   inner.addEventListener('scroll', onScroll);
+  const visibleDwell = () => activeMs + (document.visibilityState === 'visible' && segmentStart ? Date.now() - segmentStart : 0);
   const closeReader = () => {
     if (reader.hidden) return;
     onScroll();
+    const dwellMs = visibleDwell();
     // Never measured (the reader was only ever open without a viewport): let time alone bound it.
-    rec.close(completionOf({ words, dwellMs: Date.now() - openedAt, visibleFraction: visibleFraction > 0 ? visibleFraction : 1 }));
+    rec.close(completionOf({ words, dwellMs, visibleFraction: visibleFraction > 0 ? visibleFraction : 1 }), dwellMs);
     reader.hidden = true;
+    segmentStart = 0;
   };
+  // Time in another tab or with the screen off is not reading time.
+  document.addEventListener('visibilitychange', () => {
+    if (reader.hidden) return;
+    if (document.visibilityState === 'hidden') { if (segmentStart) activeMs += Date.now() - segmentStart; segmentStart = 0; }
+    else segmentStart = Date.now();
+  });
   reader.querySelector('.proteus-close')!.addEventListener('click', closeReader);
   reader.addEventListener('click', (ev) => { if (ev.target === reader) closeReader(); });
 
@@ -106,7 +121,6 @@ declare function createRecorder(opts: { user: string; session: number; grammar: 
     // A real article arrives as paragraphs separated by blank lines; the fake
     // data has one line, repeated so there is something to scroll.
     const body = card.dataset.body ?? '';
-    const bodyEl = reader.querySelector('.proteus-body')!;
     bodyEl.textContent = '';
     const paras = body.split('\n\n').filter((s) => s.trim().length > 0);
     const repeat = paras.length <= 1 && !card.dataset.url ? 8 : 1;
@@ -124,7 +138,8 @@ declare function createRecorder(opts: { user: string; session: number; grammar: 
     }
     words = paras.join(' ').split(/\s+/).filter((w) => w.length > 0).length * repeat;
     visibleFraction = 0;
-    openedAt = Date.now();
+    activeMs = 0;
+    segmentStart = document.visibilityState === 'visible' ? Date.now() : 0;
     inner.scrollTop = 0;
     reader.hidden = false;
     // The body is laid out now; a short one is entirely on screen already.

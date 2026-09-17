@@ -43,8 +43,13 @@ export interface Recorder {
   impression(path: string, article?: string): void;
   /** The user opened an article from a card. Returns false if already open. */
   open(path: string, article: string): boolean;
-  /** The open article was closed; `fractionRead` in 0..1. Emits dwell and complete. */
-  close(fractionRead: number): void;
+  /**
+   * The open article was closed; `fractionRead` in 0..1. Emits dwell and
+   * complete. `dwellMs`, when given, replaces wall-clock time since open,
+   * so a caller that knows how long the page was actually visible can
+   * report that instead.
+   */
+  close(fractionRead: number, dwellMs?: number): void;
   /** A card that had an impression left the viewport without being opened. */
   scrollPast(path: string, article: string): void;
   /** A button was pressed. */
@@ -61,6 +66,23 @@ export interface Recorder {
   snapshot(): RecorderRecord;
   /** Number of events so far. */
   size(): number;
+}
+
+/**
+ * Fraction of an article read, from what the reader could have read.
+ * Bounded by how much of the body was ever on screen (`visibleFraction`,
+ * 1 when it fits without scrolling) and by the time spent against the
+ * time the text takes at a reading pace: a summary that fits on one
+ * screen is not read in a one-second glance, and a long piece scrolled to
+ * the end in ten seconds was skimmed, not read. `minMs` is the floor on
+ * expected time, so a two-line body still needs a look.
+ */
+export function completionOf(o: { words: number; dwellMs: number; visibleFraction: number; wpm?: number; minMs?: number }): number {
+  const wpm = o.wpm ?? 220;
+  const expectedMs = Math.max(o.minMs ?? 4000, (Math.max(0, o.words) / wpm) * 60_000);
+  const timeFraction = Math.max(0, o.dwellMs) / expectedMs;
+  const visible = Math.min(1, Math.max(0, o.visibleFraction));
+  return Math.min(1, visible, timeFraction);
 }
 
 export function createRecorder(opts: RecorderOptions): Recorder {
@@ -93,9 +115,9 @@ export function createRecorder(opts: RecorderOptions): Recorder {
       events.push({ t: t(), type: 'open', path, article });
       return true;
     },
-    close(fractionRead) {
+    close(fractionRead, dwellMs) {
       if (!current) return;
-      const dwell = Math.max(0, Math.round(now() - current.openedAt));
+      const dwell = Math.max(0, Math.round(dwellMs !== undefined && Number.isFinite(dwellMs) ? dwellMs : now() - current.openedAt));
       const value = Math.min(1, Math.max(0, Number.isFinite(fractionRead) ? fractionRead : 0));
       events.push({ t: t(), type: 'dwell', path: current.path, article: current.article, value: dwell });
       events.push({ t: t(), type: 'complete', path: current.path, article: current.article, value });

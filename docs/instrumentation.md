@@ -30,7 +30,7 @@ reward and the next-session state.
 |---|---|
 | `impression` | a card or section footer at least half visible for 300 ms (once per card and article) |
 | `open` | a click on a card, not on a button in it; opens the in-page reader |
-| `dwell`, `complete` | reader closed; dwell in ms, complete = furthest scroll fraction reached |
+| `dwell`, `complete` | reader closed; dwell in ms, complete = fraction read: the smaller of how much of the body was ever on screen and dwell over the text's reading time at 220 wpm (floor 4 s), see below |
 | `scroll_past` | a card that had an impression left the viewport without being opened |
 | `action` | a button click, with the button's own node path and the card's article |
 | `session_end` | the page is left |
@@ -122,6 +122,26 @@ the failed-auth cut-off.
     npm run serve                 # http://localhost:8787
     open http://localhost:8787/u/alice   # use it, leave the tab, reload for the next screen
 
+## Completion
+
+`complete` used to be the furthest scroll fraction in the reader, which
+made every short body fully read the moment it opened and a long one fully
+read when skimmed to the end. With live content most bodies are one to six
+paragraphs, so that definition saturated on open and carried no signal.
+
+Completion is now `completionOf` in `src/client/recorder.ts`, a pure
+function the client calls on close: the smaller of the fraction of the
+article body (not the reader's title, meta or close button) that was ever
+on screen (1 when it fits) and visible dwell over the expected reading
+time, words at 220 words a minute with a 4 s floor. Dwell here is time
+the page was visible with the reader open; the `dwell` event carries the
+same number. A one-second
+glance at a summary is a quarter read; a 2200-word piece scrolled to the
+end in five minutes is half read; half an hour on the first third of it is
+a third. The simulator already draws dwell as completion times reading
+time (±30%), so the two sides define completion the same way, and the
+reward's completion term is unchanged.
+
 ## Validation (`collect.ts`)
 
 A record must carry the current grammar id, a Screen tree, and events
@@ -155,9 +175,14 @@ One session on the trained policy's screen, in the app's browser pane:
 
 ## Known limits
 
-- `complete` is the furthest scroll fraction in the reader. An article
-  that fits without scrolling counts as fully read on close. Time-based
-  reading estimates would be better.
+- `complete` is bounded by time, not measured: a reader who stared at the
+  text for its reading time counts as having read it. Time while the tab
+  is hidden with the reader open (another tab, the screen off, the
+  original article opened from the link) is excluded from both dwell and
+  completion.
+- Following "Read the original" is recorded as `action: read` on the card.
+  The reward gives it no weight yet: what a click-through is worth is a
+  calibration decision to make with real sessions, not a guess.
 - The reader is a stand-in for an article page; a real app would report
   dwell and completion from its own reader.
 - Impressions use a 300 ms, 50% visibility rule with no per-element

@@ -77,6 +77,22 @@ report(store.traceCount() >= clients.sessions, `every served screen left a trace
 }
 
 const r = trainReal({ store: dir, policy, epochs: 6, lr: 0.02 });
+{
+  // The window is the caller's, not a fixed seven days: two dated sessions 19 days
+  // apart are a return under a 30-day window and a no-return under 7, and the
+  // reward the trainer sees differs by the bonus. An undated pair is counted as such.
+  const wdir = mkdtempSync(join(tmpdir(), 'proteus-window-'));
+  const ws = new SessionStore(wdir);
+  const tree = new SessionStore(dir).sessions(store.users()[0])[0].tree;
+  const rec = (user: string, session: number, startedAt?: string) => ({ user, session, grammar: 'newsfeed@0.3.0', tree, events: [{ t: 1000, type: 'session_end' as const, path: '' }], returned: null, ...(startedAt ? { startedAt } : {}) });
+  ws.put(rec('w', 0, '2026-09-01T10:00:00Z')); ws.put(rec('w', 1, '2026-09-20T10:00:00Z'));
+  ws.put(rec('nodate', 0)); ws.put(rec('nodate', 1));
+  const seven = trainReal({ store: wdir, policy, epochs: 1, lr: 0.02 });
+  const thirty = trainReal({ store: wdir, policy, epochs: 1, lr: 0.02, returnWindowDays: 30 });
+  report(seven.sessions === 4 && thirty.meanReward - seven.meanReward > 0.7 && seven.undated === 2 && seven.censored === 1, `train-real judges returns with the window it is given (mean reward ${seven.meanReward.toFixed(2)} at 7 days, ${thirty.meanReward.toFixed(2)} at 30, for a 19-day gap); undated sessions are counted apart from censored ones (${seven.undated} undated, ${seven.censored} censored: the latest dated session, window still open)`);
+  report((() => { try { trainReal({ store: wdir, policy, epochs: 1, lr: 0.02, returnWindowDays: Infinity }); return false; } catch { return true; } })(), 'train-real rejects an infinite window');
+  rmSync(wdir, { recursive: true, force: true });
+}
 report(r.skippedNoTrace === 1 && r.skippedGreedy === 1 && r.usable === clients.sessions + 1, `train-real used ${r.usable} sessions; skipped ${r.skippedNoTrace} with no matching trace and ${r.skippedGreedy} served greedily`);
 
 // Growth bound: one address cannot introduce unlimited new user ids, and

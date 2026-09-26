@@ -83,6 +83,7 @@ const late = { ...rec2.record(), startedAt: new Date(10 * 86_400_000).toISOStrin
 const gap = assemble([record as never, late as never], { now: 30 * 86_400_000 }).get('u-test')!;
 report(gap[0].returned === false && gap[1].returned === false, 'a next session ten days later is not a return within a 7-day window; the later one is a known no-return');
 report(assemble([record as never, late as never], { now: 30 * 86_400_000, returnWindowMs: 11 * 86_400_000 }).get('u-test')![0].returned === true, 'the window is configurable (11 days: it counts)');
+report((() => { try { assemble([record as never], { returnWindowMs: Infinity }); return false; } catch { return true; } })() && (() => { try { assemble([record as never], { returnWindowMs: 0 }); return false; } catch { return true; } })(), 'an infinite or zero window is rejected');
 const undated = { ...rec2.record(), startedAt: undefined };
 report(assemble([record as never, undated as never]).get('u-test')![0].returned === true, 'without a timestamp on the next session, existence counts as a return');
 

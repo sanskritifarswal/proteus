@@ -280,7 +280,7 @@ function readBody(req: IncomingMessage, max: number): Promise<string> {
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
 export function createServer(opts: ServerOptions): Server {
-  if (opts.returnWindowDays !== undefined && !(opts.returnWindowDays > 0)) throw new Error('returnWindowDays must be positive');
+  if (opts.returnWindowDays !== undefined && !(Number.isFinite(opts.returnWindowDays) && opts.returnWindowDays > 0)) throw new Error('returnWindowDays must be a positive finite number');
   const store = new SessionStore(opts.store, { returnWindowMs: (opts.returnWindowDays ?? 7) * 86_400_000, now: opts.now });
   const max = opts.maxBodyBytes ?? 1_000_000;
   const token = opts.token;
@@ -473,7 +473,7 @@ if (process.argv[1] && basename(process.argv[1]) === 'server.ts') {
   const trustProxy = args.includes('--trust-proxy');
   const contentFile = opt('content', '') || undefined;
   const returnWindowDays = Number(opt('return-window-days', '7'));
-  if (!(returnWindowDays > 0)) { console.error('--return-window-days must be a positive number'); process.exit(2); }
+  if (!(Number.isFinite(returnWindowDays) && returnWindowDays > 0)) { console.error('--return-window-days must be a positive finite number'); process.exit(2); }
   if (!Number.isInteger(port) || port < 1 || port > 65535 || !host || !(epsilon >= 0 && epsilon < 1)) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json] [--epsilon [0,1)=0.1] [--token <secret> | PROTEUS_TOKEN] [--trust-proxy] [--content content.json] [--return-window-days 7]'); process.exit(2); }
   try { assertExposable(host, token); } catch (e) { console.error((e as Error).message); process.exit(2); }
   if (token && token.length < 16) { console.error('token must be at least 16 characters'); process.exit(2); }

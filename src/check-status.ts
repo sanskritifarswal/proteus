@@ -101,6 +101,7 @@ await withServer(undefined, async (base) => {
   try {
     const s = await (await fetch(`${base}/status.json?sim=0`)).json() as Status;
     const alice = s.users.find((u) => u.user === 'alice')!, bob = s.users.find((u) => u.user === 'bob')!;
+    report((() => { try { createServer({ store: join(dir, 'open'), policy: doc, returnWindowDays: Infinity }); return false; } catch { return true; } })(), 'createServer rejects an infinite return window');
     report(s.totals.returnKnown === 4 && s.totals.returnRate === 0.5 && alice.returnRate === 0.5 && bob.returnRate === 0.5, `with a 12 h window and the clock past it, all ${s.totals.returnKnown} outcomes are known: alice 09:00→18:00 and bob 12:00→20:00 count, the last sessions are no-returns (rate ${s.totals.returnRate})`);
   } finally { await new Promise<void>((r) => server.close(() => r())); }
 }

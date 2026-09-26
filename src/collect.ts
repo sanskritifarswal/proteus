@@ -95,6 +95,7 @@ export function sessionEnd(r: { startedAt?: string; events: Array<{ t: number }>
  */
 export function assemble(records: ExportedRecord[], opts: AssembleOptions = {}): Map<string, SessionRecord[]> {
   const window = opts.returnWindowMs ?? DEFAULT_RETURN_WINDOW_MS;
+  if (!(Number.isFinite(window) && window > 0)) throw new Error('returnWindowMs must be a positive finite number');
   const now = opts.now ?? Date.now();
   const byUser = new Map<string, ExportedRecord[]>();
   const seen = new Set<string>();
@@ -151,7 +152,7 @@ if (process.argv[1] && basename(process.argv[1]) === 'collect.ts') {
   if (bad) { console.error(`${bad} invalid record(s)`); process.exit(1); }
   let assembled: Map<string, SessionRecord[]>;
   const windowDays = Number(opt('return-window-days') ?? '7');
-  if (!(windowDays > 0)) { console.error('--return-window-days must be a positive number'); process.exit(2); }
+  if (!(Number.isFinite(windowDays) && windowDays > 0)) { console.error('--return-window-days must be a positive finite number'); process.exit(2); }
   try { assembled = assemble(records, { returnWindowMs: windowDays * 86_400_000 }); } catch (e) { console.error((e as Error).message); process.exit(1); }
   for (const [user, sessions] of assembled) {
     if (onlyUser && user !== onlyUser) continue;

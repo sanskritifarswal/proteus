@@ -16,7 +16,7 @@ import { assemble, type ExportedRecord } from '../collect.ts';
  * |z| is routinely large is one the simulator gets wrong for real people;
  * that is where calibration effort should go.
  *
- * usage: node src/real/compare.ts [--store out/server | --file out/sessions.jsonl] [--users 200] [--content out/server/content.json]
+ * usage: node src/real/compare.ts [--store out/server | --file out/sessions.jsonl] [--users 200] [--content out/server/content.json] [--return-window-days 7]
  *
  * With --content, the simulated population reads the server's cached live
  * content (its current pool, not the pool each screen was served from)
@@ -98,17 +98,19 @@ if (process.argv[1] && basename(process.argv[1]) === 'compare.ts') {
   const args = process.argv.slice(2);
   const opt = (name: string) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };
   const users = Number(opt('users') ?? '200');
-  if (!Number.isInteger(users) || users < 2) { console.error('usage: node src/real/compare.ts [--store dir | --file f] [--users <int>=2] [--content cache.json]'); process.exit(2); }
+  const returnWindowDays = Number(opt('return-window-days') ?? '7');
+  if (!Number.isInteger(users) || users < 2 || !(Number.isFinite(returnWindowDays) && returnWindowDays > 0)) { console.error('usage: node src/real/compare.ts [--store dir | --file f] [--users <int>=2] [--content cache.json] [--return-window-days 7]'); process.exit(2); }
+  const returnWindowMs = returnWindowDays * 86_400_000;
   let records: SessionRecord[] = [];
   if (opt('file')) {
     const f = opt('file')!;
     if (!existsSync(f)) { console.error(`no such file: ${f}`); process.exit(1); }
     const raw = readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as ExportedRecord);
-    records = [...assemble(raw).values()].flat();
+    records = [...assemble(raw, { returnWindowMs }).values()].flat();
   } else {
     // Imported here, not at the top: the server imports this module for its status page.
     const { SessionStore } = await import('../server.ts');
-    const store = new SessionStore(opt('store') ?? 'out/server');
+    const store = new SessionStore(opt('store') ?? 'out/server', { returnWindowMs });
     records = store.users().flatMap((u) => store.sessions(u));
   }
   if (!records.length) { console.error('no sessions to compare'); process.exit(1); }

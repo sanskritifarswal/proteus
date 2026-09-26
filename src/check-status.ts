@@ -25,7 +25,8 @@ const doc = JSON.parse(readFileSync('examples/valid/dense-list.json', 'utf8')) a
 const learned = train({ iterations: 2, usersPerIteration: 20, maxSessions: 3, lr: 0.02, l2: 0.001, seed: 1 }).policy;
 
 async function withServer<T>(token: string | undefined, fn: (base: string) => Promise<T>): Promise<T> {
-  const server = createServer({ store: join(dir, token ? 'tok' : 'open'), policy: token ? doc : learned, epsilon: token ? 0 : 0.1, token, statusSimUsers: 20, seed: 7 });
+  // A fixed clock the day after the posted sessions, so their 7-day return windows are open.
+  const server = createServer({ store: join(dir, token ? 'tok' : 'open'), policy: token ? doc : learned, epsilon: token ? 0 : 0.1, token, statusSimUsers: 20, seed: 7, now: () => Date.parse('2026-09-17T00:00:00Z') });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try { return await fn(base); } finally { await new Promise<void>((r) => server.close(() => r())); }
@@ -91,6 +92,18 @@ await withServer(undefined, async (base) => {
   const index = await (await fetch(`${base}/`)).text();
   report(index.includes('href="/status"'), 'the index links to the status page');
 });
+
+// The same store seen with a 12-hour return window from three days later: every outcome is known.
+{
+  const server = createServer({ store: join(dir, 'open'), policy: doc, returnWindowDays: 0.5, now: () => Date.parse('2026-09-20T00:00:00Z') });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const s = await (await fetch(`${base}/status.json?sim=0`)).json() as Status;
+    const alice = s.users.find((u) => u.user === 'alice')!, bob = s.users.find((u) => u.user === 'bob')!;
+    report(s.totals.returnKnown === 4 && s.totals.returnRate === 0.5 && alice.returnRate === 0.5 && bob.returnRate === 0.5, `with a 12 h window and the clock past it, all ${s.totals.returnKnown} outcomes are known: alice 09:00→18:00 and bob 12:00→20:00 count, the last sessions are no-returns (rate ${s.totals.returnRate})`);
+  } finally { await new Promise<void>((r) => server.close(() => r())); }
+}
 
 // Restricting the gap to recent sessions must not restrict the history they are simulated with.
 {

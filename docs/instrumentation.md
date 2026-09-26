@@ -21,8 +21,8 @@ the code removes one whole class of it.
 `demo` picks the tree with the trained policy from `out/policy.json`
 (greedy, conditioned on the user's exported sessions), or `--policy random`,
 or a fixed example. `collect` validates every record, derives `returned`
-from whether a next session exists (censored on the last), and prints
-reward and the next-session state.
+within the return window (below), and prints reward and the next-session
+state.
 
 ## What the page records
 
@@ -142,6 +142,28 @@ a third. The simulator already draws dwell as completion times reading
 time (±30%), so the two sides define completion the same way, and the
 reward's completion term is unchanged.
 
+## Return
+
+`returned` on an assembled session is decided inside a window, 7 days by
+default (`--return-window-days` on `serve` and `collect`):
+
+| next session | window | `returned` |
+|---|---|---|
+| starts within the window of this one ending | | `true` |
+| starts after the window | | `false` |
+| none yet, window still open | | `null` (censored) |
+| none, window closed | | `false` |
+
+Before this, a return was "any later session ever" and a lone session
+stayed censored forever, so a reader who never came back never counted
+against anything and a return three months later counted like one the
+next day. The reward gives the bonus for `true` only, so `false` and
+`null` score alike; what changes is what is known: the status page's
+return rate is over known outcomes, and `train-real` reports how many of
+its sessions still have the window open, since their rewards may yet gain
+a bonus. Records without a start time (the simulator's, or old exports)
+fall back to the existence rule.
+
 ## Validation (`collect.ts`)
 
 A record must carry the current grammar id, a Screen tree, and events
@@ -157,8 +179,10 @@ reasons.
   passes the collector's validation, has every path in the tree, and its
   reward matches the formula by hand.
 - A snapshot appends `session_end` without ending the recorder.
-- With a next session present, the earlier one is marked returned; a lone
-  session is censored.
+- Return within the window: a next session inside it counts, one after it
+  does not, a lone session is censored until the window closes and a known
+  no-return after; the window is configurable; records without timestamps
+  fall back to existence.
 - Malformed records are rejected.
 - The embedded client script has no `export` or `declare` left in it.
 - Server (`check-server.ts`): serves a user's screen, accepts a snapshot,

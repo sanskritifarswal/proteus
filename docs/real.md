@@ -34,8 +34,10 @@ two users in the same state never share an exploration sequence.
 ## `npm run train-real`
 
 Pairs each stored session with its trace, derives reward-to-go from the
-user's later sessions (return derived from whether a next session
-exists, censored on the last), fits a linear value baseline on the real
+user's later sessions (return decided within the 7-day window described
+in docs/instrumentation.md; sessions whose window is still open are
+counted in the report, since their reward may still gain the return
+bonus), fits a linear value baseline on the real
 states, and takes Adam epochs of importance-weighted policy gradient
 from the current policy: each decision's log-probability gradient under
 the *current* policy, scaled by its advantage and by

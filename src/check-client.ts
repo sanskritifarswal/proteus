@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { createRecorder } from './client/recorder.ts';
+import { createRecorder, completionOf } from './client/recorder.ts';
 import { clientScript } from './render-html.ts';
 import { validateRecord, assemble } from './collect.ts';
 import { sessionReward, defaultWeights } from './reward.ts';
@@ -17,6 +17,23 @@ const report = (ok: boolean, msg: string) => { if (!ok) failures++; console.log(
 const doc = JSON.parse(readFileSync('examples/valid/editorial-home.json', 'utf8')) as UIDocument;
 let clock = 1_000_000;
 const now = () => clock;
+// Completion: bounded by what was on screen and by time at reading pace.
+report(completionOf({ words: 10, dwellMs: 1000, visibleFraction: 1 }) === 0.25, 'a ten-word summary glanced at for a second is a quarter read (4 s floor on expected time)');
+report(completionOf({ words: 10, dwellMs: 4000, visibleFraction: 1 }) === 1 && completionOf({ words: 10, dwellMs: 60_000, visibleFraction: 1 }) === 1, 'four seconds on it is fully read; longer does not exceed 1');
+report(Math.abs(completionOf({ words: 60, dwellMs: 4000, visibleFraction: 1 }) - 4000 / (60 / 220 * 60_000)) < 1e-9, 'a 60-word summary needs about 16 s: four seconds on it is a quarter');
+report(Math.abs(completionOf({ words: 2200, dwellMs: 5 * 60_000, visibleFraction: 1 }) - 0.5) < 1e-9, 'a 2200-word article scrolled to the end in five minutes is half read (10 min at 220 wpm)');
+report(completionOf({ words: 2200, dwellMs: 30 * 60_000, visibleFraction: 0.3 }) === 0.3, 'half an hour on the first third of a long article is a third read');
+report(completionOf({ words: 0, dwellMs: 10_000, visibleFraction: 1.4 }) === 1 && completionOf({ words: 100, dwellMs: -5, visibleFraction: 1 }) === 0, 'no words or an overscrolled fraction clamp to 1; negative dwell to 0');
+report(completionOf({ words: 440, dwellMs: 60_000, visibleFraction: 1, wpm: 440 }) === 1 && completionOf({ words: 440, dwellMs: 60_000, visibleFraction: 1 }) === 0.5, 'reading pace is a parameter (default 220 wpm)');
+
+{
+  let clock = 0;
+  const r = createRecorder({ user: 'u-dwell', session: 0, grammar: doc.grammar, tree: doc.tree, now: () => clock });
+  r.open('sections[0].content.item', 'A'); clock += 50_000; r.close(0.5, 12_000);
+  const dwell = r.snapshot().events.find((e) => e.type === 'dwell') as { value: number };
+  report(dwell.value === 12_000, 'close(fraction, dwellMs) records the given visible time rather than wall-clock time since open');
+}
+
 const rec = createRecorder({ user: 'u-test', session: 0, grammar: doc.grammar, tree: doc.tree, now });
 const item = 'sections[0].content.item';
 const lead = 'sections[0].content.lead';

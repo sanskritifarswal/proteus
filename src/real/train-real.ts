@@ -40,6 +40,8 @@ export interface TrainRealOptions {
   clip?: number;
   /** Return window in days, the same the server was serving with. Default 7. */
   returnWindowDays?: number;
+  /** Clock the window is judged against; tests inject one. Default Date.now. */
+  now?: () => number;
 }
 
 export interface TrainRealReport {
@@ -70,7 +72,7 @@ export interface TrainRealReport {
 
 export function trainReal(opts: TrainRealOptions): TrainRealReport {
   if (opts.returnWindowDays !== undefined && !(Number.isFinite(opts.returnWindowDays) && opts.returnWindowDays > 0)) throw new Error('returnWindowDays must be a positive finite number');
-  const store = new SessionStore(opts.store, { returnWindowMs: (opts.returnWindowDays ?? 7) * 86_400_000 });
+  const store = new SessionStore(opts.store, { returnWindowMs: (opts.returnWindowDays ?? 7) * 86_400_000, now: opts.now });
   const policy = opts.policy;
   const epochs = opts.epochs ?? 5;
   const lr = opts.lr ?? 0.02;

@@ -92,6 +92,10 @@ export interface ServerOptions {
   seed?: number;
   /** Simulated readers per real session on the status page's gap table. Default 50. */
   statusSimUsers?: number;
+  /** A return counts when the next session starts within this many days of the last one ending. Default 7. */
+  returnWindowDays?: number;
+  /** Clock the return window is judged against; tests inject one. Default Date.now. */
+  now?: () => number;
   /**
    * What fills the screen's feeds for each user. Default: the fake data,
    * the same for everyone. Live syndicated content with personal feeds
@@ -133,7 +137,10 @@ export class SessionStore {
   /** Log lines that could not be loaded, with reasons. */
   readonly skipped: string[] = [];
 
-  constructor(dir: string) {
+  private readonly assembleOpts: { returnWindowMs?: number; now?: () => number };
+
+  constructor(dir: string, opts: { returnWindowMs?: number; now?: () => number } = {}) {
+    this.assembleOpts = opts;
     mkdirSync(dir, { recursive: true });
     this.logFile = join(dir, 'events.jsonl');
     this.traceFile = join(dir, 'traces.jsonl');
@@ -186,7 +193,7 @@ export class SessionStore {
     return [...this.current.values()].filter((r) => user === undefined || r.user === user).sort((a, b) => a.user.localeCompare(b.user) || a.session - b.session);
   }
 
-  sessions(user: string): SessionRecord[] { return assemble(this.records(user)).get(user) ?? []; }
+  sessions(user: string): SessionRecord[] { return assemble(this.records(user), { returnWindowMs: this.assembleOpts.returnWindowMs, now: this.assembleOpts.now?.() }).get(user) ?? []; }
 
   /** Record the decision trace of a served screen, keyed by the tree it served. */
   putTrace(t: StoredTrace): void {
@@ -273,7 +280,8 @@ function readBody(req: IncomingMessage, max: number): Promise<string> {
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
 export function createServer(opts: ServerOptions): Server {
-  const store = new SessionStore(opts.store);
+  if (opts.returnWindowDays !== undefined && !(Number.isFinite(opts.returnWindowDays) && opts.returnWindowDays > 0)) throw new Error('returnWindowDays must be a positive finite number');
+  const store = new SessionStore(opts.store, { returnWindowMs: (opts.returnWindowDays ?? 7) * 86_400_000, now: opts.now });
   const max = opts.maxBodyBytes ?? 1_000_000;
   const token = opts.token;
   if (token !== undefined && token.length < 16) throw new Error('token must be at least 16 characters');
@@ -283,6 +291,7 @@ export function createServer(opts: ServerOptions): Server {
   // they saved or left unfinished are pinned before a refresh could drop them.
   for (const u of store.users()) content.forUser(store.sessions(u));
   const policyName = opts.policy === 'random' ? 'random' : 'grammar' in opts.policy ? 'fixed' : opts.policy.name;
+  // The status page's own timestamps stay on the wall clock; `now` only decides return windows.
   const status = new StatusReporter(store, { policy: policyName, epsilon: opts.epsilon ?? 0, startedAt: Date.now(), content, simUsers: opts.statusSimUsers });
   // Failed authentications per address, sliding hour. An address over the
   // cap is refused before its credentials are looked at, so guessing past
@@ -463,7 +472,9 @@ if (process.argv[1] && basename(process.argv[1]) === 'server.ts') {
   const token = opt('token', process.env.PROTEUS_TOKEN ?? '') || undefined;
   const trustProxy = args.includes('--trust-proxy');
   const contentFile = opt('content', '') || undefined;
-  if (!Number.isInteger(port) || port < 1 || port > 65535 || !host || !(epsilon >= 0 && epsilon < 1)) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json] [--epsilon [0,1)=0.1] [--token <secret> | PROTEUS_TOKEN] [--trust-proxy] [--content content.json]'); process.exit(2); }
+  const returnWindowDays = Number(opt('return-window-days', '7'));
+  if (!(Number.isFinite(returnWindowDays) && returnWindowDays > 0)) { console.error('--return-window-days must be a positive finite number'); process.exit(2); }
+  if (!Number.isInteger(port) || port < 1 || port > 65535 || !host || !(epsilon >= 0 && epsilon < 1)) { console.error('usage: node src/server.ts [--port <int>] [--host 127.0.0.1] [--store dir] [--policy trained|random|<example>] [--policy-file out/policy.json] [--epsilon [0,1)=0.1] [--token <secret> | PROTEUS_TOKEN] [--trust-proxy] [--content content.json] [--return-window-days 7]'); process.exit(2); }
   try { assertExposable(host, token); } catch (e) { console.error((e as Error).message); process.exit(2); }
   if (token && token.length < 16) { console.error('token must be at least 16 characters'); process.exit(2); }
   let policy: ServerOptions['policy'];
@@ -485,5 +496,5 @@ if (process.argv[1] && basename(process.argv[1]) === 'server.ts') {
     live.start();
     content = live;
   }
-  createServer({ store, policy, epsilon, token, trustProxy, content }).listen(port, host, () => console.log(`proteus serving on http://${host}:${port} (store ${store}, policy ${policyName}${policyName === 'trained' ? `, epsilon ${epsilon}` : ''}, ${token ? 'token set: operator routes need a bearer token, user links are signed' : 'no token: open, loopback only'}, content ${contentFile ? `live from ${contentFile}` : 'fake'})`));
+  createServer({ store, policy, epsilon, token, trustProxy, content, returnWindowDays }).listen(port, host, () => console.log(`proteus serving on http://${host}:${port} (store ${store}, policy ${policyName}${policyName === 'trained' ? `, epsilon ${epsilon}` : ''}, ${token ? 'token set: operator routes need a bearer token, user links are signed' : 'no token: open, loopback only'}, content ${contentFile ? `live from ${contentFile}` : 'fake'})`));
 }

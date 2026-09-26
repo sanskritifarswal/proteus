@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { sessionEnd } from '../collect.ts';
 import { basename } from 'node:path';
 import type { Decision } from '../sample.ts';
 import { sessionReward } from '../reward.ts';
@@ -37,6 +38,10 @@ export interface TrainRealOptions {
   l2?: number;
   /** Cap on the importance weight. */
   clip?: number;
+  /** Return window in days, the same the server was serving with. Default 7. */
+  returnWindowDays?: number;
+  /** Clock the window is judged against; tests inject one. Default Date.now. */
+  now?: () => number;
 }
 
 export interface TrainRealReport {
@@ -47,6 +52,14 @@ export interface TrainRealReport {
   skippedNoTrace: number;
   /** Served with ε = 0: deterministic behaviour probabilities, not trainable. */
   skippedGreedy: number;
+  /**
+   * Sessions whose return window is still open. They train like the rest,
+   * with their reward missing a return bonus that may still arrive, so a
+   * store where most sessions are recent trains on rewards biased low.
+   */
+  censored: number;
+  /** Sessions without a start time: their return can only be judged by existence, never by the window. */
+  undated: number;
   meanReward: number;
   /**
    * Per epoch: mean importance weight, and the surrogate objective, the
@@ -58,7 +71,8 @@ export interface TrainRealReport {
 }
 
 export function trainReal(opts: TrainRealOptions): TrainRealReport {
-  const store = new SessionStore(opts.store);
+  if (opts.returnWindowDays !== undefined && !(Number.isFinite(opts.returnWindowDays) && opts.returnWindowDays > 0)) throw new Error('returnWindowDays must be a positive finite number');
+  const store = new SessionStore(opts.store, { returnWindowMs: (opts.returnWindowDays ?? 7) * 86_400_000, now: opts.now });
   const policy = opts.policy;
   const epochs = opts.epochs ?? 5;
   const lr = opts.lr ?? 0.02;
@@ -67,7 +81,7 @@ export function trainReal(opts: TrainRealOptions): TrainRealReport {
 
   type Item = { togo: number; rawState: Float64Array; steps: NonNullable<ReturnType<SessionStore['trace']>>['steps']; index: number };
   const items: Item[] = [];
-  let sessions = 0, usable = 0, skippedNoTrace = 0, skippedGreedy = 0, rewardSum = 0;
+  let sessions = 0, usable = 0, skippedNoTrace = 0, skippedGreedy = 0, censored = 0, undated = 0, rewardSum = 0;
   const users = store.users();
   for (const user of users) {
     const list = store.sessions(user);
@@ -77,6 +91,8 @@ export function trainReal(opts: TrainRealOptions): TrainRealReport {
     for (let s = rewards.length - 1; s >= 0; s--) { g = rewards[s] + g; togo[s] = g; }
     list.forEach((s, i) => {
       sessions++;
+      if (sessionEnd(s) === undefined) undated++;
+      else if (s.returned === null) censored++;
       rewardSum += rewards[i];
       const trace = store.trace(user, s.session, treeHash(s.tree));
       if (!trace || trace.steps.length === 0) { skippedNoTrace++; return; }
@@ -85,7 +101,7 @@ export function trainReal(opts: TrainRealOptions): TrainRealReport {
       items.push({ togo: togo[i], rawState: Float64Array.from(trace.steps[0].rawState), steps: trace.steps, index: i });
     });
   }
-  const report: TrainRealReport = { users: users.length, sessions, usable, skippedNoTrace, skippedGreedy, meanReward: sessions ? rewardSum / sessions : 0, epochs: [] };
+  const report: TrainRealReport = { users: users.length, sessions, usable, skippedNoTrace, skippedGreedy, censored, undated, meanReward: sessions ? rewardSum / sessions : 0, epochs: [] };
   if (items.length === 0) return report;
 
   const value = new LinearValue();
@@ -125,12 +141,13 @@ if (process.argv[1] && basename(process.argv[1]) === 'train-real.ts') {
   const out = opt('out', 'out/policy-real.json');
   const epochs = Number(opt('epochs', '5'));
   const lr = Number(opt('lr', '0.02'));
+  const returnWindowDays = Number(opt('return-window-days', '7'));
   if (!existsSync(policyFile)) { console.error(`no policy at ${policyFile}`); process.exit(1); }
-  if (!Number.isInteger(epochs) || epochs < 1 || !(lr > 0)) { console.error('usage: node src/real/train-real.ts [--store dir] [--policy-file f] [--out f] [--epochs <int>] [--lr <float>]'); process.exit(2); }
+  if (!Number.isInteger(epochs) || epochs < 1 || !(lr > 0) || !(Number.isFinite(returnWindowDays) && returnWindowDays > 0)) { console.error('usage: node src/real/train-real.ts [--store dir] [--policy-file f] [--out f] [--epochs <int>] [--lr <float>] [--return-window-days 7 (use the value the server served with)]'); process.exit(2); }
   const loaded = loadPolicyFile(policyFile);
   if (!(loaded instanceof LinearPolicy)) { console.error('train-real supports the linear policy in this version'); process.exit(1); }
-  const report = trainReal({ store, policy: loaded, epochs, lr });
-  console.log(`${report.users} users, ${report.sessions} sessions, ${report.usable} usable (${report.skippedNoTrace} skipped: no matching trace; ${report.skippedGreedy} skipped: served greedily), mean reward ${report.meanReward.toFixed(2)}`);
+  const report = trainReal({ store, policy: loaded, epochs, lr, returnWindowDays });
+  console.log(`${report.users} users, ${report.sessions} sessions, ${report.usable} usable (${report.skippedNoTrace} skipped: no matching trace; ${report.skippedGreedy} skipped: served greedily), ${report.censored} with the return window still open${report.undated ? `, ${report.undated} undated` : ''}, mean reward ${report.meanReward.toFixed(2)}`);
   report.epochs.forEach((e, i) => console.log(`  epoch ${i + 1}: mean importance weight ${e.meanWeight.toFixed(3)}, surrogate ${e.surrogate.toFixed(4)}`));
   if (report.usable === 0) { console.error('nothing to train on: serve with --epsilon > 0 so traces are recorded'); process.exit(1); }
   writeFileSync(out, JSON.stringify(loaded.toJSON()));

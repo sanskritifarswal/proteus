@@ -17,7 +17,7 @@ import { fakeData } from './fake-data.ts';
  * whether the user's next session exists, and the composite reward and the
  * policy state are computed with the very code the simulator uses.
  *
- * usage: node src/collect.ts --file out/sessions.jsonl [--add record.json] [--user id]
+ * usage: node src/collect.ts --file out/sessions.jsonl [--add record.json] [--user id] [--return-window-days 7]
  */
 export interface ExportedRecord extends Omit<SessionRecord, 'returned'> {
   returned: boolean | null;
@@ -66,14 +66,37 @@ export function validateRecord(rec: unknown): string[] {
   return errors;
 }
 
+export interface AssembleOptions {
+  /** A return counts when the next session starts within this long of the session's end. Default 7 days. */
+  returnWindowMs?: number;
+  /** The observation time: a session with no next one is censored until this is past its end plus the window. Default Date.now(). */
+  now?: number;
+}
+export const DEFAULT_RETURN_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** When a session ended, from its start and its last event; undefined when the record has no start time. */
+export function sessionEnd(r: { startedAt?: string; events: Array<{ t: number }> }): number | undefined {
+  if (!r.startedAt) return undefined;
+  const t0 = Date.parse(r.startedAt);
+  if (!Number.isFinite(t0)) return undefined;
+  return t0 + (r.events[r.events.length - 1]?.t ?? 0);
+}
+
 /**
- * Group by user, order by session, derive `returned` from the next
- * session's existence (censored on the last). Two records for the same
- * (user, session) are an error: re-adding an export, or ingesting both a
- * hidden-page snapshot and the final record, would otherwise invent a
- * session and a return.
+ * Group by user, order by session, derive `returned` within a window:
+ * true when the next session started within `returnWindowMs` of this one
+ * ending, false when it started later than that or when the observation
+ * time is past the window with no next session, null (censored) while the
+ * window is still open. Without timestamps on either side the rule falls
+ * back to existence: a next session means true, none means null. Two
+ * records for the same (user, session) are an error: re-adding an export,
+ * or ingesting both a hidden-page snapshot and the final record, would
+ * otherwise invent a session and a return.
  */
-export function assemble(records: ExportedRecord[]): Map<string, SessionRecord[]> {
+export function assemble(records: ExportedRecord[], opts: AssembleOptions = {}): Map<string, SessionRecord[]> {
+  const window = opts.returnWindowMs ?? DEFAULT_RETURN_WINDOW_MS;
+  if (!(Number.isFinite(window) && window > 0)) throw new Error('returnWindowMs must be a positive finite number');
+  const now = opts.now ?? Date.now();
   const byUser = new Map<string, ExportedRecord[]>();
   const seen = new Set<string>();
   for (const r of records) {
@@ -85,7 +108,18 @@ export function assemble(records: ExportedRecord[]): Map<string, SessionRecord[]
   const out = new Map<string, SessionRecord[]>();
   for (const [user, list] of byUser) {
     list.sort((a, b) => a.session - b.session);
-    out.set(user, list.map((r, i) => ({ user: r.user, session: r.session, grammar: r.grammar, tree: r.tree, events: r.events, returned: i < list.length - 1 ? true : null, ...(r.startedAt ? { startedAt: r.startedAt } : {}) })));
+    const returned = (i: number): boolean | null => {
+      const end = sessionEnd(list[i]);
+      const next = list[i + 1];
+      if (next) {
+        const start = next.startedAt ? Date.parse(next.startedAt) : NaN;
+        if (end === undefined || !Number.isFinite(start)) return true;
+        return start - end <= window;
+      }
+      if (end === undefined) return null;
+      return now - end > window ? false : null;
+    };
+    out.set(user, list.map((r, i) => ({ user: r.user, session: r.session, grammar: r.grammar, tree: r.tree, events: r.events, returned: returned(i), ...(r.startedAt ? { startedAt: r.startedAt } : {}) })));
   }
   return out;
 }
@@ -117,7 +151,9 @@ if (process.argv[1] && basename(process.argv[1]) === 'collect.ts') {
   records.forEach((r, i) => { const e = validateRecord(r); if (e.length) { bad++; console.error(`line ${i + 1}: ${e.join('; ')}`); } });
   if (bad) { console.error(`${bad} invalid record(s)`); process.exit(1); }
   let assembled: Map<string, SessionRecord[]>;
-  try { assembled = assemble(records); } catch (e) { console.error((e as Error).message); process.exit(1); }
+  const windowDays = Number(opt('return-window-days') ?? '7');
+  if (!(Number.isFinite(windowDays) && windowDays > 0)) { console.error('--return-window-days must be a positive finite number'); process.exit(2); }
+  try { assembled = assemble(records, { returnWindowMs: windowDays * 86_400_000 }); } catch (e) { console.error((e as Error).message); process.exit(1); }
   for (const [user, sessions] of assembled) {
     if (onlyUser && user !== onlyUser) continue;
     console.log(`user ${user}: ${sessions.length} session(s)`);

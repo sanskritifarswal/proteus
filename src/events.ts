@@ -51,9 +51,11 @@ export interface SessionRecord {
   tree: UINode;
   events: UIEvent[];
   /**
-   * Whether the user came back for a next session. `null` when unobserved:
-   * the session was the last one inside the observation window, so the
-   * outcome is censored, not false. Reward treats null as no return bonus.
+   * Whether the user came back for a next session within the return window
+   * (7 days by default; see collect.ts). `false` is a known no-return: the
+   * window closed with no next session, or the next one came later. `null`
+   * is censored: the window is still open. Reward gives the bonus for true
+   * only, so false and null score alike; they differ for what is known.
    */
   returned: boolean | null;
   /** Wall-clock start as an ISO string, when the recorder had one. The simulator leaves it unset. */

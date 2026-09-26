@@ -62,8 +62,11 @@ report(validateRecord(record).length === 0, `recorder output passes the collecto
 const paths = nodePaths(doc.tree);
 report(record.events.every((e) => paths.has(e.path)), 'every recorded path is a node in the tree');
 
-const sessions = assemble([record as never]).get('u-test')!;
-report(sessions.length === 1 && sessions[0].returned === null, 'a lone session has unknown (censored) return');
+// The recorder's clock started at 0, so this session is dated 1970: with the observation time inside the window it is censored.
+const sessions = assemble([record as never], { now: 0 }).get('u-test')!;
+report(sessions.length === 1 && sessions[0].returned === null, 'a lone session has unknown (censored) return while the window is open');
+report(assemble([record as never], { now: 8 * 86_400_000 }).get('u-test')![0].returned === false, 'a lone session is a known no-return once the window has closed');
+report(assemble([{ ...record, startedAt: undefined } as never]).get('u-test')![0].returned === null, 'a lone session without a start time stays censored (no window to close)');
 const r = sessionReward(sessions[0]);
 const w = defaultWeights;
 const expected = w.open * Math.sqrt(2) + w.completion * Math.sqrt(0.8) + w.dwellPerMinute * (95_000 / 60_000) + Math.sqrt(w.save) + w.scrollPast * 1;
@@ -74,8 +77,15 @@ report(state[0] === 1 && state[2] > 0 && Number.isFinite(state[3]), `state featu
 // Two sessions: the first is now known to have returned.
 const rec2 = createRecorder({ user: 'u-test', session: 1, grammar: doc.grammar, tree: doc.tree, now });
 rec2.end();
-const two = assemble([record as never, rec2.record() as never]).get('u-test')!;
-report(two[0].returned === true && two[1].returned === null, 'with a next session, the earlier one is marked returned');
+const two = assemble([record as never, rec2.record() as never], { now: 0 }).get('u-test')!;
+report(two[0].returned === true && two[1].returned === null, 'with a next session inside the window, the earlier one is marked returned');
+const late = { ...rec2.record(), startedAt: new Date(10 * 86_400_000).toISOString() };
+const gap = assemble([record as never, late as never], { now: 30 * 86_400_000 }).get('u-test')!;
+report(gap[0].returned === false && gap[1].returned === false, 'a next session ten days later is not a return within a 7-day window; the later one is a known no-return');
+report(assemble([record as never, late as never], { now: 30 * 86_400_000, returnWindowMs: 11 * 86_400_000 }).get('u-test')![0].returned === true, 'the window is configurable (11 days: it counts)');
+report((() => { try { assemble([record as never], { returnWindowMs: Infinity }); return false; } catch { return true; } })() && (() => { try { assemble([record as never], { returnWindowMs: 0 }); return false; } catch { return true; } })(), 'an infinite or zero window is rejected');
+const undated = { ...rec2.record(), startedAt: undefined };
+report(assemble([record as never, undated as never]).get('u-test')![0].returned === true, 'without a timestamp on the next session, existence counts as a return');
 
 // Malformed records are rejected.
 const bad = JSON.parse(JSON.stringify(record));

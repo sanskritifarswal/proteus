@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
 import type { SessionRecord } from '../events.ts';
 import { makeRng } from '../rng.ts';
 import { fakeData } from '../fake-data.ts';
@@ -26,6 +26,50 @@ import { SessionStore } from '../store.ts';
  */
 export const METRICS = ['opens', 'completion', 'scrollPast', 'actions', 'dwellMin', 'reward'] as const;
 export type Metric = typeof METRICS[number];
+/** Smallest simulated standard deviation a z-score is taken against, per metric, in the metric's units. */
+export const SD_FLOOR: Record<Metric, number> = { opens: 0.25, completion: 0.1, scrollPast: 0.5, actions: 0.25, dwellMin: 0.25, reward: 0.5 };
+
+/**
+ * How much of what real readers saw the content provider knows about: the
+ * share of distinct articles in the sessions' events that resolve to a
+ * topic. Sessions served with live content and compared against the fake
+ * data resolve almost nothing, and the simulation would then be of
+ * different articles than the readers had.
+ */
+export function contentCoverage(records: SessionRecord[], content: ContentProvider): { known: number; total: number } {
+  const titles = new Set<string>();
+  for (const r of records) for (const e of r.events) if ('article' in e && e.article) titles.add(e.article);
+  let known = 0;
+  for (const t of titles) if (content.topicOf(t) !== undefined) known++;
+  return { known, total: titles.size };
+}
+
+/**
+ * The content to simulate with for a store: the server's cached live pool
+ * when it wrote one (`<store>/content.json`), else the fake data. The
+ * caller says which was used.
+ */
+export function contentForStore(storeDir: string): { content: ContentProvider; source: string } {
+  const cache = join(storeDir, 'content.json');
+  if (existsSync(cache)) {
+    const live = new LiveContent({ config: { feeds: ['http://cache.invalid/'] }, cacheFile: cache });
+    if (live.size > 0) return { content: live, source: `live pool cached at ${cache} (${live.size} articles)` };
+  }
+  return { content: staticContent(fakeData), source: 'fake data' };
+}
+
+export function loadContentCache(file: string): ContentProvider {
+  if (!existsSync(file)) throw new Error(`no content cache at ${file}; the server writes one under its store when run with --content`);
+  const live = new LiveContent({ config: { feeds: ['http://cache.invalid/'] }, cacheFile: file });
+  if (live.size === 0) throw new Error(`${file} holds no articles`);
+  return live;
+}
+
+export function coverageWarning(records: SessionRecord[], content: ContentProvider, source: string): string | undefined {
+  const c = contentCoverage(records, content);
+  if (c.total === 0 || c.known / c.total >= 0.5) return undefined;
+  return `warning: only ${c.known} of ${c.total} articles in these sessions are in the ${source}; the simulation is of different articles than the readers had (pass --content <store>/content.json, the pool they were served from)`;
+}
 
 export function metricsOf(s: SessionRecord): Record<Metric, number> {
   let opens = 0, completion = 0, scrollPast = 0, actions = 0, dwellMs = 0;
@@ -82,7 +126,11 @@ export function compareSessions(records: SessionRecord[], usersPerTree = 200, se
         const xs = sims.map((s) => s[m]);
         const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
         const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length);
-        simMean[m] = mean; simSd[m] = sd; z[m] = sd > 0 ? (real[m] - mean) / sd : 0;
+        // A floor on the simulated spread: a metric the population never produces
+        // (every simulated reader takes zero actions, say) must still register
+        // as a gap when a real reader produces it, not as z = 0.
+        const floored = Math.max(sd, SD_FLOOR[m]);
+        simMean[m] = mean; simSd[m] = sd; z[m] = (real[m] - mean) / floored;
       }
       perSession.push({ user: rec.user, session: rec.session, real, simMean, simSd, z });
       for (const e of rec.events) if (e.type === 'open') seen.add(e.article);
@@ -115,16 +163,19 @@ if (process.argv[1] && basename(process.argv[1]) === 'compare.ts') {
     records = store.users().flatMap((u) => store.sessions(u));
   }
   if (!records.length) { console.error('no sessions to compare'); process.exit(1); }
-  let content: ContentProvider | undefined;
+  let content: ContentProvider, source: string;
   if (opt('content')) {
-    const f = opt('content')!;
-    if (!existsSync(f)) { console.error(`no content cache at ${f}; the server writes one under its store when run with --content`); process.exit(1); }
-    const live = new LiveContent({ config: { feeds: ['http://cache.invalid/'] }, cacheFile: f });
-    if (live.size === 0) { console.error(`${f} holds no articles`); process.exit(1); }
-    content = live;
+    try { content = loadContentCache(opt('content')!); } catch (e) { console.error((e as Error).message); process.exit(1); }
+    source = `content cache ${opt('content')}`;
+  } else if (opt('file')) {
+    content = staticContent(fakeData); source = 'fake data';
+  } else {
+    ({ content, source } = contentForStore(opt('store') ?? 'out/server'));
   }
+  const warning = coverageWarning(records, content, source);
+  if (warning) console.error(warning);
   const { perSession, meanAbsZ, meanZ } = compareSessions(records, users, 1, content, undefined, calibration);
-  console.log(`${records.length} real session(s), each against ${users} simulated users on the same tree${opt('calibration') ? ` (calibrated: ${describeCalibration(calibration)})` : ''}\n`);
+  console.log(`${records.length} real session(s), each against ${users} simulated users on the same tree, content: ${source}${opt('calibration') ? `, calibrated: ${describeCalibration(calibration)}` : ''}\n`);
   console.log(`${'user'.padEnd(14)} ${'s'.padStart(2)} ${METRICS.map((m) => m.padStart(14)).join('')}`);
   for (const c of perSession) console.log(`${c.user.padEnd(14)} ${String(c.session).padStart(2)} ${METRICS.map((m) => `${c.real[m].toFixed(1)} (${c.z[m] >= 0 ? '+' : ''}${c.z[m].toFixed(1)}σ)`.padStart(14)).join('')}`);
   console.log(`\n${'mean z'.padEnd(17)} ${METRICS.map((m) => `${meanZ[m] >= 0 ? '+' : ''}${meanZ[m].toFixed(2)}`.padStart(14)).join('')}`);

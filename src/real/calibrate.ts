@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import type { SessionRecord } from '../events.ts';
 import { fakeData } from '../fake-data.ts';
-import { LiveContent, staticContent, type ContentProvider } from '../content/content.ts';
-import { compareSessions, type Metric } from './compare.ts';
+import { staticContent, type ContentProvider } from '../content/content.ts';
+import { compareSessions, contentForStore, coverageWarning, loadContentCache, type Metric } from './compare.ts';
 import { CALIBRATION_KEYS, IDENTITY, describeCalibration, type Calibration, type CalibrationFile } from '../sim/calibration.ts';
 import { assemble, type ExportedRecord } from '../collect.ts';
 import { SessionStore } from '../store.ts';
@@ -61,6 +61,7 @@ export function calibrate(opts: CalibrateOptions): CalibrateResult {
   const content = opts.content ?? staticContent(fakeData);
   const simUsers = opts.simUsers ?? 60;
   const ridge = opts.ridge ?? 0.05;
+  if (!(Number.isFinite(ridge) && ridge >= 0)) throw new Error('ridge must be a finite number >= 0');
   const rounds = opts.rounds ?? 6;
   const [lo, hi] = opts.bounds ?? [0.2, 5];
   const seed = opts.seed ?? 1;
@@ -107,7 +108,7 @@ if (process.argv[1] && basename(process.argv[1]) === 'calibrate.ts') {
   const ridge = Number(opt('ridge') ?? '0.05');
   const returnWindowDays = Number(opt('return-window-days') ?? '7');
   const out = opt('out') ?? 'out/calibration.json';
-  if (!Number.isInteger(simUsers) || simUsers < 2 || !Number.isInteger(rounds) || rounds < 1 || !(ridge >= 0) || !(Number.isFinite(returnWindowDays) && returnWindowDays > 0)) {
+  if (!Number.isInteger(simUsers) || simUsers < 2 || !Number.isInteger(rounds) || rounds < 1 || !(Number.isFinite(ridge) && ridge >= 0) || !(Number.isFinite(returnWindowDays) && returnWindowDays > 0)) {
     console.error('usage: node src/real/calibrate.ts [--store out/server | --file out/sessions.jsonl] [--content out/server/content.json] [--users 60] [--rounds 6] [--ridge 0.05] [--return-window-days 7] [--out out/calibration.json]');
     process.exit(2);
   }
@@ -123,15 +124,22 @@ if (process.argv[1] && basename(process.argv[1]) === 'calibrate.ts') {
     records = store.users().flatMap((u) => store.sessions(u));
   }
   if (!records.length) { console.error('no sessions to calibrate against'); process.exit(1); }
-  let content: ContentProvider | undefined;
+  // The articles matter: read times and topics move dwell and opens, so the
+  // simulation must use the pool the readers were served from. Default to the
+  // store's cached pool when the server wrote one, and warn when the
+  // sessions' articles are mostly unknown to whatever is used.
+  let content: ContentProvider, source: string;
   if (opt('content')) {
-    const f = opt('content')!;
-    if (!existsSync(f)) { console.error(`no content cache at ${f}`); process.exit(1); }
-    const live = new LiveContent({ config: { feeds: ['http://cache.invalid/'] }, cacheFile: f });
-    if (live.size === 0) { console.error(`${f} holds no articles`); process.exit(1); }
-    content = live;
+    try { content = loadContentCache(opt('content')!); } catch (e) { console.error((e as Error).message); process.exit(1); }
+    source = `content cache ${opt('content')}`;
+  } else if (opt('file')) {
+    content = staticContent(fakeData); source = 'fake data';
+  } else {
+    ({ content, source } = contentForStore(opt('store') ?? 'out/server'));
   }
-  console.log(`${records.length} real session(s), ${simUsers} simulated readers per session per evaluation\n`);
+  const warning = coverageWarning(records, content, source);
+  if (warning) console.error(warning);
+  console.log(`${records.length} real session(s), ${simUsers} simulated readers per session per evaluation, content: ${source}\n`);
   const result = calibrate({ records, content, simUsers, rounds, ridge, log: (m) => console.log(m) });
   const file: CalibrationFile = {
     calibration: result.calibration, fittedAt: new Date().toISOString(), sessions: records.length,

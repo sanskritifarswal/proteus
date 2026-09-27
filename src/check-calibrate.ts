@@ -9,7 +9,8 @@ import { makePopulation } from './sim/users.ts';
 import { simulateSession } from './sim/simulate.ts';
 import { IDENTITY, loadCalibration, validateCalibration, type Calibration } from './sim/calibration.ts';
 import { calibrate } from './real/calibrate.ts';
-import { compareSessions } from './real/compare.ts';
+import { compareSessions, contentCoverage, coverageWarning } from './real/compare.ts';
+import { staticContent } from './content/content.ts';
 
 /**
  * Calibration recovers a known shift. "Real" sessions are produced by the
@@ -53,7 +54,32 @@ function realSessions(cal: Calibration, n: number, seed: number): SessionRecord[
   const loaded = loadCalibration(join(dir, 'c.json'));
   report(loaded.dwell === 1.7 && loaded.curiosity === -0.2 && loaded.patience === 1, 'a calibration file round-trips through loadCalibration');
   report((() => { try { loadCalibration(join(dir, 'missing.json')); return false; } catch { return true; } })(), 'a missing calibration file is an error');
+  writeFileSync(join(dir, 'null.json'), 'null');
+  report((() => { try { loadCalibration(join(dir, 'null.json')); return false; } catch (e) { return (e as Error).message.includes('calibration must be an object'); } })(), 'a calibration file holding null gets the validation error, not a TypeError');
   rmSync(dir, { recursive: true, force: true });
+  report((() => { try { calibrate({ records: realSessions(IDENTITY, 2, 1), ridge: Infinity, simUsers: 4, rounds: 1 }); return false; } catch { return true; } })() && (() => { try { calibrate({ records: realSessions(IDENTITY, 2, 1), ridge: -1, simUsers: 4, rounds: 1 }); return false; } catch { return true; } })(), 'an infinite or negative ridge is refused');
+
+  // Zero simulated variance must not hide a real gap: on a tree with no
+  // buttons the simulator can never act, so its action spread is exactly 0;
+  // a real reader's action on it must still score.
+  const noButtons: UIDocument = { grammar: doc.grammar, tree: { type: 'Screen', props: { density: 'compact' }, slots: { sections: [{ type: 'Section', props: { source: 'topStories' }, slots: { content: { type: 'Collection', props: { layout: 'stack', limit: '5' }, slots: { item: { type: 'Card', props: { variant: 'compact' }, slots: { title: { type: 'Text', props: { role: 'title', maxLines: '2' }, bind: 'title' } } } } } } }] } } };
+  const acted: SessionRecord = { user: 'a', session: 0, grammar: doc.grammar, tree: noButtons.tree, returned: null, events: [
+    { t: 0, type: 'impression', path: 'sections[0].content.item', article: 'City council approves new bike lane network' },
+    { t: 100, type: 'open', path: 'sections[0].content.item', article: 'City council approves new bike lane network' },
+    { t: 30_100, type: 'dwell', path: 'sections[0].content.item', article: 'City council approves new bike lane network', value: 30_000 },
+    { t: 30_100, type: 'complete', path: 'sections[0].content.item', article: 'City council approves new bike lane network', value: 0.8 },
+    { t: 30_200, type: 'action', path: 'sections[0].content.item', action: 'save', article: 'City council approves new bike lane network' },
+    { t: 31_000, type: 'session_end', path: '' },
+  ] };
+  const mute = compareSessions([acted], 30, 4);
+  const c = mute.perSession[0];
+  report(c.simSd.actions === 0 && c.simMean.actions === 0 && c.z.actions === 4, `with a population that cannot act (sim sd 0), a real action registers as z ${c.z.actions.toFixed(2)} (1 action over the 0.25 floor), not 0`);
+
+  // Content coverage: sessions on fake articles are fully covered by the fake data; invented titles are not.
+  const fakeCov = contentCoverage(realSessions(IDENTITY, 6, 22), staticContent());
+  const foreign = realSessions(IDENTITY, 6, 22).map((r) => ({ ...r, events: r.events.map((e) => ('article' in e && e.article ? { ...e, article: `elsewhere: ${e.article}` } : e)) as SessionRecord['events'] }));
+  const foreignCov = contentCoverage(foreign, staticContent());
+  report(fakeCov.total > 0 && fakeCov.known === fakeCov.total && foreignCov.known === 0 && coverageWarning(foreign, staticContent(), 'fake data')?.startsWith('warning:') === true && coverageWarning(realSessions(IDENTITY, 6, 22), staticContent(), 'fake data') === undefined, `content coverage: ${fakeCov.known}/${fakeCov.total} known on matching content, ${foreignCov.known}/${foreignCov.total} on foreign titles, and only the latter warns`);
 }
 
 // --- Recovery of a known shift ---

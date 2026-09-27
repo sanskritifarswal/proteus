@@ -1,7 +1,7 @@
 {
-  "$id": "newsfeed@0.2.0",
+  "$id": "newsfeed@0.3.0",
   "name": "newsfeed",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "root": "Screen",
   "rootContext": "screen",
   "contexts": {
@@ -34,12 +34,7 @@
   },
   "strings": [
     "header.home",
-    "header.forYou",
-    "section.topStories",
-    "section.forYou",
-    "section.following",
-    "section.continueReading",
-    "section.saved"
+    "header.forYou"
   ],
   "components": {
     "Screen": {
@@ -69,7 +64,8 @@
             "Section"
           ],
           "min": 1,
-          "max": 5
+          "max": 5,
+          "distinctBy": "source"
         }
       }
     },
@@ -119,6 +115,7 @@
       },
       "slots": {
         "heading": {
+          "description": "Always the feed name, so a heading can never disagree with its source.",
           "accepts": [
             "Text"
           ],
@@ -129,8 +126,15 @@
             "role": [
               "title",
               "label"
+            ],
+            "maxLines": [
+              "1"
             ]
-          }
+          },
+          "childContent": "bind",
+          "childBind": [
+            "name"
+          ]
         },
         "content": {
           "accepts": [
@@ -280,7 +284,7 @@
           ],
           "min": 0,
           "max": 2,
-          "distinct": true,
+          "distinctBy": "bind",
           "childProps": {
             "role": [
               "caption",
@@ -318,7 +322,7 @@
           ],
           "min": 0,
           "max": 2,
-          "distinct": true
+          "distinctBy": "action"
         }
       },
       "constraints": [
@@ -328,6 +332,20 @@
             "is": "hero"
           },
           "requireSlot": "media"
+        },
+        {
+          "when": {
+            "prop": "variant",
+            "is": "hero"
+          },
+          "childProps": {
+            "slot": "media",
+            "prop": "aspect",
+            "in": [
+              "16:9",
+              "4:3"
+            ]
+          }
         },
         {
           "when": {

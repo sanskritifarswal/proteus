@@ -82,10 +82,20 @@ logit), shrinking when a round finds nothing. Each evaluation simulates
 every real session's tree for `--users` synthetic readers (default 60);
 a few dozen sessions fit in well under a second.
 
-    npm run calibrate -- --store out/server [--content out/server/content.json] [--users 60] [--rounds 6] [--ridge 0.05]
+    npm run calibrate -- --store out/server [--users 60] [--rounds 6] [--ridge 0.05]
     npm run compare  -- --calibration out/calibration.json   # the gap, re-measured
     npm run serve    -- --calibration out/calibration.json   # the status page's gap table uses it
     npm run train    -- --calibration out/calibration.json   # a policy trained against the fitted population
+
+The articles matter: read times and topics move dwell and opens, so the
+simulation must use the pool the readers were served from. `calibrate`
+and `compare` default to the store's cached live pool
+(`<store>/content.json`) when the server wrote one, else the fake data,
+and say which; `--content` overrides. Either warns when fewer than half
+the articles in the sessions are known to the content in use. The
+simulated standard deviation is floored per metric (`SD_FLOOR` in
+compare.ts) so that a metric the population never produces, actions from
+readers who never act, still registers as a gap rather than z = 0.
 
 Check (`src/check-calibrate.ts`): sessions produced by the simulator with
 dwell doubled and patience halved, handed to `calibrate` as if real, come

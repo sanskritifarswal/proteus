@@ -55,7 +55,7 @@ export function contentForStore(storeDir: string, records: SessionRecord[] = [])
   const fake = { content: staticContent(fakeData), source: 'fake data' };
   const cache = join(storeDir, 'content.json');
   if (!existsSync(cache)) return fake;
-  const live = new LiveContent({ config: { feeds: ['http://cache.invalid/'] }, cacheFile: cache });
+  const live = new LiveContent({ config: { feeds: ['http://cache.invalid/'] }, cacheFile: cache, limitsFromCache: true });
   if (live.size === 0) return fake;
   const pool = { content: live, source: `live pool cached at ${cache} (${live.size} articles)` };
   const known = (c: ContentProvider) => contentCoverage(records, c).known;
@@ -64,7 +64,7 @@ export function contentForStore(storeDir: string, records: SessionRecord[] = [])
 
 export function loadContentCache(file: string): ContentProvider {
   if (!existsSync(file)) throw new Error(`no content cache at ${file}; the server writes one under its store when run with --content`);
-  const live = new LiveContent({ config: { feeds: ['http://cache.invalid/'] }, cacheFile: file });
+  const live = new LiveContent({ config: { feeds: ['http://cache.invalid/'] }, cacheFile: file, limitsFromCache: true });
   if (live.size === 0) throw new Error(`${file} holds no articles`);
   return live;
 }

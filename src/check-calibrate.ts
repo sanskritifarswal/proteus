@@ -94,6 +94,11 @@ function realSessions(cal: Calibration, n: number, seed: number): SessionRecord[
   report(pickFake.source === 'fake data' && pickPool.source.startsWith('live pool cached'), `a stale live cache is not chosen over the fake data the sessions were served with (fake-served → ${pickFake.source}; pool-served → ${pickPool.source.slice(0, 16)}…)`);
   const rebuilt = pickPool.content.forUser([]);
   report(rebuilt.feeds.topStories.articles.length === 2 && served.forUser([]).feeds.topStories.articles.length === 2, `a provider rebuilt from the cache keeps the serving perFeed limit (${rebuilt.feeds.topStories.articles.length} of 6 pooled stories in Top Stories, as served)`);
+  const restarted = new LiveContent({ config: { feeds: ['https://pool.example/rss'] }, cacheFile: join(storeDir, 'content.json') });
+  report(restarted.forUser([]).feeds.topStories.articles.length === 6, 'a serving server whose config dropped perFeed gets the default back, not the cached limit');
+  writeFileSync(join(storeDir, 'content.json'), JSON.stringify({ articles: {} }));
+  const malformed = new LiveContent({ config: { feeds: ['https://pool.example/rss'] }, cacheFile: join(storeDir, 'content.json') });
+  report(malformed.size === 0, 'a cache with valid JSON but the wrong shape is ignored, not fatal');
   rmSync(storeDir, { recursive: true, force: true });
 }
 

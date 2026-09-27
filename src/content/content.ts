@@ -155,6 +155,14 @@ export interface LiveContentOptions {
   config: ContentConfig;
   /** Where the last good snapshot is kept, so a restart or an outage serves what was last fetched. */
   cacheFile?: string;
+  /**
+   * Take perFeed, poolSize and pinLimit from the cache when the config
+   * leaves them unset. For a provider rebuilt from a store's snapshot
+   * (compare, calibrate), which must shape the feeds as that server did.
+   * A serving server leaves this off: its config is authoritative, and a
+   * limit removed from it is gone.
+   */
+  limitsFromCache?: boolean;
   fetchText?: FetchText;
   now?: () => number;
   log?: (msg: string) => void;
@@ -207,11 +215,13 @@ export class LiveContent implements ContentProvider {
     this.cacheFile = opts.cacheFile;
     let snap: Snapshot | undefined;
     if (this.cacheFile && existsSync(this.cacheFile)) {
-      try { snap = JSON.parse(readFileSync(this.cacheFile, 'utf8')) as Snapshot; } catch (e) { this.log(`content: ignoring unreadable cache ${this.cacheFile}: ${(e as Error).message}`); }
+      try {
+        const raw = JSON.parse(readFileSync(this.cacheFile, 'utf8')) as Partial<Snapshot> | null;
+        if (!raw || typeof raw !== 'object' || !Array.isArray(raw.articles) || !raw.articles.every((a) => a && typeof a === 'object' && typeof a.title === 'string' && typeof a.source === 'string' && typeof a.published === 'number')) throw new Error('not a content snapshot');
+        snap = { fetchedAt: typeof raw.fetchedAt === 'number' ? raw.fetchedAt : 0, articles: raw.articles, pinned: Array.isArray(raw.pinned) ? raw.pinned.filter((t): t is string => typeof t === 'string') : [], limits: raw.limits && typeof raw.limits === 'object' ? raw.limits : undefined };
+      } catch (e) { this.log(`content: ignoring unreadable cache ${this.cacheFile}: ${(e as Error).message}`); }
     }
-    // Limits the caller left unset come from the cache, so a provider rebuilt
-    // from a store's snapshot serves the feeds the way that server did.
-    if (snap?.limits) cfg = { ...snap.limits, ...cfg };
+    if (opts.limitsFromCache && snap?.limits) cfg = { ...snap.limits, ...cfg };
     this.cfg = cfg;
     if (snap) {
       for (const t of snap.pinned ?? []) this.pinned.add(t);

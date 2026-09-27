@@ -92,6 +92,8 @@ export interface Snapshot {
   articles: PooledArticle[];
   /** Titles readers have saved, followed from or left unfinished, newest pin last; kept in the pool across refreshes. */
   pinned?: string[];
+  /** The serving limits, so a provider rebuilt from the cache (compare, calibrate) shapes the feeds the way readers saw them. */
+  limits?: Pick<ContentConfig, 'perFeed' | 'poolSize' | 'pinLimit'>;
 }
 
 export type FetchText = (url: string) => Promise<string>;
@@ -195,7 +197,7 @@ export class LiveContent implements ContentProvider {
   readonly errors = new Map<string, string>();
 
   constructor(opts: LiveContentOptions) {
-    this.cfg = opts.config;
+    let cfg = opts.config;
     if (!Array.isArray(opts.config.feeds) || opts.config.feeds.length === 0) throw new Error('content config needs a non-empty "feeds" list');
     this.specs = opts.config.feeds.map((f) => (typeof f === 'string' ? { url: f } : f));
     for (const s of this.specs) if (!/^https?:\/\//.test(s.url)) throw new Error(`feed url must be http(s): ${s.url}`);
@@ -203,13 +205,18 @@ export class LiveContent implements ContentProvider {
     this.now = opts.now ?? Date.now;
     this.log = opts.log ?? (() => {});
     this.cacheFile = opts.cacheFile;
+    let snap: Snapshot | undefined;
     if (this.cacheFile && existsSync(this.cacheFile)) {
-      try {
-        const snap = JSON.parse(readFileSync(this.cacheFile, 'utf8')) as Snapshot;
-        for (const t of snap.pinned ?? []) this.pinned.add(t);
-        this.setPool(snap.articles.map((a) => ({ ...a, inFeed: a.inFeed ?? true })), snap.fetchedAt);
-        this.log(`content: loaded ${snap.articles.length} cached article(s)`);
-      } catch (e) { this.log(`content: ignoring unreadable cache ${this.cacheFile}: ${(e as Error).message}`); }
+      try { snap = JSON.parse(readFileSync(this.cacheFile, 'utf8')) as Snapshot; } catch (e) { this.log(`content: ignoring unreadable cache ${this.cacheFile}: ${(e as Error).message}`); }
+    }
+    // Limits the caller left unset come from the cache, so a provider rebuilt
+    // from a store's snapshot serves the feeds the way that server did.
+    if (snap?.limits) cfg = { ...snap.limits, ...cfg };
+    this.cfg = cfg;
+    if (snap) {
+      for (const t of snap.pinned ?? []) this.pinned.add(t);
+      this.setPool(snap.articles.map((a) => ({ ...a, inFeed: a.inFeed ?? true })), snap.fetchedAt);
+      this.log(`content: loaded ${snap.articles.length} cached article(s)`);
     }
   }
 
@@ -249,7 +256,11 @@ export class LiveContent implements ContentProvider {
     mkdirSync(dirname(this.cacheFile), { recursive: true });
     // Write beside, then rename: a crash mid-write must not leave the only fallback truncated.
     const tmp = `${this.cacheFile}.${process.pid}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ fetchedAt: this.fetchedAt, articles: this.pool, pinned: [...this.pinned] } satisfies Snapshot));
+    const limits: Snapshot['limits'] = {};
+    if (this.cfg.perFeed !== undefined) limits.perFeed = this.cfg.perFeed;
+    if (this.cfg.poolSize !== undefined) limits.poolSize = this.cfg.poolSize;
+    if (this.cfg.pinLimit !== undefined) limits.pinLimit = this.cfg.pinLimit;
+    writeFileSync(tmp, JSON.stringify({ fetchedAt: this.fetchedAt, articles: this.pool, pinned: [...this.pinned], limits } satisfies Snapshot));
     renameSync(tmp, this.cacheFile);
   }
 

@@ -89,8 +89,9 @@ a few dozen sessions fit in well under a second.
 
 The articles matter: read times and topics move dwell and opens, so the
 simulation must use the pool the readers were served from. `calibrate`
-and `compare` default to the store's cached live pool
-(`<store>/content.json`) when the server wrote one, else the fake data,
+and `compare` choose between the store's cached live pool
+(`<store>/content.json`, which also carries the serving limits) and the
+fake data by which one knows more of the articles the sessions mention,
 and say which; `--content` overrides. Either warns when fewer than half
 the articles in the sessions are known to the content in use. The
 simulated standard deviation is floored per metric (`SD_FLOOR` in

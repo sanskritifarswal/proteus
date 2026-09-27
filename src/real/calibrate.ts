@@ -135,7 +135,7 @@ if (process.argv[1] && basename(process.argv[1]) === 'calibrate.ts') {
   } else if (opt('file')) {
     content = staticContent(fakeData); source = 'fake data';
   } else {
-    ({ content, source } = contentForStore(opt('store') ?? 'out/server'));
+    ({ content, source } = contentForStore(opt('store') ?? 'out/server', records));
   }
   const warning = coverageWarning(records, content, source);
   if (warning) console.error(warning);

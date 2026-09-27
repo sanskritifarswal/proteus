@@ -45,17 +45,21 @@ export function contentCoverage(records: SessionRecord[], content: ContentProvid
 }
 
 /**
- * The content to simulate with for a store: the server's cached live pool
- * when it wrote one (`<store>/content.json`), else the fake data. The
- * caller says which was used.
+ * The content to simulate these sessions with, for a store: the server's
+ * cached live pool (`<store>/content.json`) or the fake data, whichever
+ * knows more of the articles the sessions mention. A store can hold a
+ * cache from an earlier live run and sessions served with fake data
+ * since, or the other way round; the sessions themselves say which.
  */
-export function contentForStore(storeDir: string): { content: ContentProvider; source: string } {
+export function contentForStore(storeDir: string, records: SessionRecord[] = []): { content: ContentProvider; source: string } {
+  const fake = { content: staticContent(fakeData), source: 'fake data' };
   const cache = join(storeDir, 'content.json');
-  if (existsSync(cache)) {
-    const live = new LiveContent({ config: { feeds: ['http://cache.invalid/'] }, cacheFile: cache });
-    if (live.size > 0) return { content: live, source: `live pool cached at ${cache} (${live.size} articles)` };
-  }
-  return { content: staticContent(fakeData), source: 'fake data' };
+  if (!existsSync(cache)) return fake;
+  const live = new LiveContent({ config: { feeds: ['http://cache.invalid/'] }, cacheFile: cache });
+  if (live.size === 0) return fake;
+  const pool = { content: live, source: `live pool cached at ${cache} (${live.size} articles)` };
+  const known = (c: ContentProvider) => contentCoverage(records, c).known;
+  return known(pool.content) >= known(fake.content) ? pool : fake;
 }
 
 export function loadContentCache(file: string): ContentProvider {
@@ -170,7 +174,7 @@ if (process.argv[1] && basename(process.argv[1]) === 'compare.ts') {
   } else if (opt('file')) {
     content = staticContent(fakeData); source = 'fake data';
   } else {
-    ({ content, source } = contentForStore(opt('store') ?? 'out/server'));
+    ({ content, source } = contentForStore(opt('store') ?? 'out/server', records));
   }
   const warning = coverageWarning(records, content, source);
   if (warning) console.error(warning);

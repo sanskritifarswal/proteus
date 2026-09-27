@@ -9,8 +9,8 @@ import { makePopulation } from './sim/users.ts';
 import { simulateSession } from './sim/simulate.ts';
 import { IDENTITY, loadCalibration, validateCalibration, type Calibration } from './sim/calibration.ts';
 import { calibrate } from './real/calibrate.ts';
-import { compareSessions, contentCoverage, coverageWarning } from './real/compare.ts';
-import { staticContent } from './content/content.ts';
+import { compareSessions, contentCoverage, contentForStore, coverageWarning } from './real/compare.ts';
+import { LiveContent, staticContent } from './content/content.ts';
 
 /**
  * Calibration recovers a known shift. "Real" sessions are produced by the
@@ -80,6 +80,21 @@ function realSessions(cal: Calibration, n: number, seed: number): SessionRecord[
   const foreign = realSessions(IDENTITY, 6, 22).map((r) => ({ ...r, events: r.events.map((e) => ('article' in e && e.article ? { ...e, article: `elsewhere: ${e.article}` } : e)) as SessionRecord['events'] }));
   const foreignCov = contentCoverage(foreign, staticContent());
   report(fakeCov.total > 0 && fakeCov.known === fakeCov.total && foreignCov.known === 0 && coverageWarning(foreign, staticContent(), 'fake data')?.startsWith('warning:') === true && coverageWarning(realSessions(IDENTITY, 6, 22), staticContent(), 'fake data') === undefined, `content coverage: ${fakeCov.known}/${fakeCov.total} known on matching content, ${foreignCov.known}/${foreignCov.total} on foreign titles, and only the latter warns`);
+
+  // A store holding a live cache: the sessions decide which content is simulated,
+  // and a provider rebuilt from the cache keeps the serving limits.
+  const storeDir = mkdtempSync(join(tmpdir(), 'proteus-calstore-'));
+  const rss = `<rss version="2.0"><channel><title>Pool</title>${Array.from({ length: 6 }, (_, i) => `<item><title>Pooled story ${i}</title><link>https://pool.example/${i}</link><description>Body ${i}.</description><pubDate>Tue, 15 Sep 2026 0${i}:00:00 GMT</pubDate></item>`).join('')}</channel></rss>`;
+  const served = new LiveContent({ config: { feeds: ['https://pool.example/rss'], perFeed: 2 }, cacheFile: join(storeDir, 'content.json'), fetchText: async () => rss, now: () => Date.parse('2026-09-16T00:00:00Z') });
+  await served.refresh();
+  const onFake = realSessions(IDENTITY, 4, 23);
+  const onPool = onFake.map((r) => ({ ...r, events: r.events.map((e, i) => ('article' in e && e.article ? { ...e, article: `Pooled story ${i % 6}` } : e)) as SessionRecord['events'] }));
+  const pickFake = contentForStore(storeDir, onFake);
+  const pickPool = contentForStore(storeDir, onPool);
+  report(pickFake.source === 'fake data' && pickPool.source.startsWith('live pool cached'), `a stale live cache is not chosen over the fake data the sessions were served with (fake-served → ${pickFake.source}; pool-served → ${pickPool.source.slice(0, 16)}…)`);
+  const rebuilt = pickPool.content.forUser([]);
+  report(rebuilt.feeds.topStories.articles.length === 2 && served.forUser([]).feeds.topStories.articles.length === 2, `a provider rebuilt from the cache keeps the serving perFeed limit (${rebuilt.feeds.topStories.articles.length} of 6 pooled stories in Top Stories, as served)`);
+  rmSync(storeDir, { recursive: true, force: true });
 }
 
 // --- Recovery of a known shift ---

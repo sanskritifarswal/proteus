@@ -37,7 +37,8 @@ Read [docs/grammar.md](docs/grammar.md) for the design, [docs/sampler.md](docs/s
 | `src/content/` | Live content: RSS/Atom parser, article pool, personal feeds derived from a user's actions (see [docs/content.md](docs/content.md)) |
 | `src/check-content.ts` | Parser, pool, cache and served-page checks, offline on fixtures |
 | `src/status.ts`, `src/check-status.ts` | Operator status page: readers, sessions, reward by session index, sim-to-real gap on recent sessions |
-| `src/real/` | Training from stored real sessions, the sim-to-real comparison, synthetic clients |
+| `src/real/` | Training from stored real sessions, the sim-to-real comparison, calibration of the population to real sessions, synthetic clients |
+| `src/sim/calibration.ts`, `src/check-calibrate.ts` | Five global scales on the synthetic population, fitted by `npm run calibrate`; the check recovers a known shift |
 | `src/check-real.ts` | Real-session pipeline checks (serve with exploration → clients → train-real → compare) |
 | `schema/newsfeed.schema.json`, `schema/newsfeed.grammar.json` | Generated; do not edit |
 | `examples/` | Example UI trees |

@@ -57,7 +57,7 @@ export interface CalibrationFile {
 export function loadCalibration(file: string): Calibration {
   if (!existsSync(file)) throw new Error(`no calibration at ${file}; run npm run calibrate first`);
   const json = JSON.parse(readFileSync(file, 'utf8')) as CalibrationFile | Calibration;
-  return validateCalibration('calibration' in json ? json.calibration : json);
+  return validateCalibration(json !== null && typeof json === 'object' && 'calibration' in json ? json.calibration : json);
 }
 
 export function describeCalibration(c: Calibration): string {

@@ -152,3 +152,11 @@ already are.
 - Topic affinity is static per user; interests do not drift.
 - Section order matters only through scroll position. There is no model of
   a user looking for a specific section.
+
+## Calibration
+
+The population's five global scales (dwell, read depth, curiosity,
+patience, social) can be fitted to real sessions with `npm run calibrate`
+and passed to `compare`, `serve` and `train` as `--calibration`. See
+docs/real.md. Identity is the simulator as designed, which is what every
+number in this document was measured with.

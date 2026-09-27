@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { makeRng } from '../rng.ts';
 import { fakeData } from '../fake-data.ts';
 import { makePopulation } from '../sim/users.ts';
+import { loadCalibration } from '../sim/calibration.ts';
 import { fixedScreenPolicy, loadExample, randomScreenPolicy, runEpisodes, type ScreenPolicy } from '../sim/episodes.ts';
 import { choiceSummary, learnedScreenPolicy, train } from './train.ts';
 import { STATE_NAMES } from './features.ts';
@@ -31,17 +32,20 @@ const creditMode = opt('credit', 'session') as 'session' | 'path';
 const model = opt('model', 'linear') as 'linear' | 'mlp';
 const hidden = Number(opt('hidden', '32'));
 const outDir = opt('out', 'out');
+const calibrationFile = opt('calibration', '');
+const calibration = calibrationFile ? loadCalibration(calibrationFile) : undefined;
 if (![iterations, usersPerIteration, maxSessions, seed].every(Number.isInteger)
   || iterations < 1 || usersPerIteration < 1 || maxSessions < 1
   || !Number.isFinite(lr) || !(lr > 0) || !(gamma > 0 && gamma <= 1) || !['index', 'value'].includes(baselineMode)
   || !(epsilon >= 0 && epsilon < 1) || !['batch', 'index'].includes(standardize) || !['sgd', 'adam'].includes(optimizer) || !['session', 'path'].includes(creditMode) || !['linear', 'mlp'].includes(model) || !Number.isInteger(hidden) || hidden < 1) {
-  console.error('usage: node src/policy/run.ts [--iterations <int>] [--users <int>] [--sessions <int>] [--lr <float>] [--gamma (0,1]] [--baseline index|value] [--epsilon [0,1)] [--standardize batch|index] [--optimizer sgd|adam] [--credit session|path] [--model linear|mlp] [--hidden <int>] [--seed <int>] [--out dir]');
+  console.error('usage: node src/policy/run.ts [--iterations <int>] [--users <int>] [--sessions <int>] [--lr <float>] [--gamma (0,1]] [--baseline index|value] [--epsilon [0,1)] [--standardize batch|index] [--optimizer sgd|adam] [--credit session|path] [--model linear|mlp] [--hidden <int>] [--seed <int>] [--out dir] [--calibration out/calibration.json]');
   process.exit(2);
 }
 
 console.log(`training: ${iterations} iterations x ${usersPerIteration} users x up to ${maxSessions} sessions, lr ${lr}, gamma ${gamma}, baseline ${baselineMode}, epsilon ${epsilon}, standardize ${standardize}, optimizer ${optimizer}, credit ${creditMode}, model ${model}${model === 'mlp' ? ` (hidden ${hidden})` : ''}, seed ${seed}`);
 const t0 = Date.now();
 const { policy, lastBatch } = train({
+  calibration,
   iterations, usersPerIteration, maxSessions, lr, l2: 0.001, seed, gamma, baseline: baselineMode, epsilon, standardize, optimizer, credit: creditMode, model, hidden,
   onIteration: (i, r) => { if (i % 10 === 0 || i === iterations - 1) console.log(`  iter ${String(i).padStart(3)}  train mean episode reward ${r.toFixed(2)}`); },
 });
@@ -53,7 +57,7 @@ writeFileSync(`${outDir}/policy.json`, JSON.stringify(policy.toJSON()));
 
 // Held-out evaluation: a population the trainer never saw.
 const evalSeed = 999_001;
-const evalPop = makePopulation(400, makeRng(evalSeed));
+const evalPop = makePopulation(400, makeRng(evalSeed), undefined, calibration);
 const policies: Array<[string, ScreenPolicy]> = [
   ['random-local', randomScreenPolicy('local')],
   ['random-uniform', randomScreenPolicy('uniform')],
@@ -75,7 +79,7 @@ console.log(`\nlearned policy (sampled), choices from session 2 on, by archetype
 console.log(`${'archetype'.padEnd(16)} ${'reward'.padStart(7)} ${'compact'.padStart(8)} ${'sections'.padStart(9)} ${'heroLead'.padStart(9)} ${'compactItems'.padStart(13)} ${'btns/card'.padStart(10)}`);
 const compactBy: Record<string, number> = {};
 for (const a of ['power-reader', 'browser', 'local-loyalist', 'casual']) {
-  const pop = makePopulation(200, makeRng(evalSeed + 7), a);
+  const pop = makePopulation(200, makeRng(evalSeed + 7), a, calibration);
   const sp = learnedScreenPolicy(policy);
   const r = runEpisodes(sp, pop, fakeData, maxSessions, evalSeed + 7).stats.meanEpisodeReward;
   const c = choiceSummary(learnedScreenPolicy(policy), pop, maxSessions, evalSeed + 7)!;

@@ -6,7 +6,8 @@ import { sessionReward } from '../reward.ts';
 import { LinearPolicy } from '../policy/linear-policy.ts';
 import { LinearValue } from '../policy/value.ts';
 import type { Step } from '../policy/model.ts';
-import { loadPolicyFile, SessionStore, treeHash } from '../server.ts';
+import { loadPolicyFile, treeHash } from '../server.ts';
+import { SessionStore } from '../store.ts';
 
 /**
  * Policy-gradient updates from real sessions.

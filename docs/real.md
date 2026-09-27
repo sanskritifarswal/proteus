@@ -55,6 +55,50 @@ the screen, behave on it with the simulator, POST the record. Exercises
 serve → trace → record → store → train-real without a human. Says
 nothing about the sim-to-real gap; that needs people.
 
+## `npm run calibrate`
+
+The gap, closed where five numbers can close it. The archetypes are
+hand-designed and their scales are guesses: how long a read takes, how
+far people scroll, how readily they open, how much of a piece they read,
+how often they press a button. `calibrate` fits one global adjustment per
+compared metric to the stored real sessions and writes
+`out/calibration.json`:
+
+| scale | acts on | metric it moves |
+|---|---|---|
+| `dwell` | multiplies dwell time | dwellMin |
+| `readDepth` | multiplies read depth (clamped) | completion |
+| `curiosity` | added to the open logit | opens |
+| `patience` | multiplies items looked at | scrollPast |
+| `social` | multiplies save/share/follow chance | actions |
+
+The archetypes keep their shape, their differences from each other; the
+whole population moves. The objective is the systematic gap: the mean z
+per metric (from `compare`), squared, averaged over the five, plus a ridge
+term pulling each scale toward identity in log space so that a handful of
+sessions moves a scale only where the evidence is strong. Search is
+coordinate descent over multiplicative steps (additive for the curiosity
+logit), shrinking when a round finds nothing. Each evaluation simulates
+every real session's tree for `--users` synthetic readers (default 60);
+a few dozen sessions fit in well under a second.
+
+    npm run calibrate -- --store out/server [--content out/server/content.json] [--users 60] [--rounds 6] [--ridge 0.05]
+    npm run compare  -- --calibration out/calibration.json   # the gap, re-measured
+    npm run serve    -- --calibration out/calibration.json   # the status page's gap table uses it
+    npm run train    -- --calibration out/calibration.json   # a policy trained against the fitted population
+
+Check (`src/check-calibrate.ts`): sessions produced by the simulator with
+dwell doubled and patience halved, handed to `calibrate` as if real, come
+back with dwell ×2.0 and patience ×0.6 and the gap on those metrics
+shrunk to noise, while the scales the truth did not move stay at identity;
+sessions from the unmoved population leave every scale at identity.
+
+What calibration cannot do: change the archetypes' shape, the topic
+model, or anything about how readers differ from each other. If the
+per-session |z| stays large after calibration while the mean z is near 0,
+the population's spread is wrong, not its centre, and that is an archetype
+design problem, not a scale.
+
 ## `npm run compare`
 
 The gap, measured. For each real session, the same tree is simulated for

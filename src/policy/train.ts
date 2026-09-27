@@ -7,6 +7,7 @@ import { newsfeed } from '../grammars/newsfeed.ts';
 import { fakeData } from '../fake-data.ts';
 import { attributeReward, sessionReward } from '../reward.ts';
 import { makePopulation, type SimUser } from '../sim/users.ts';
+import type { Calibration } from '../sim/calibration.ts';
 import { fixedScreenPolicy, loadExample, randomScreenPolicy, runEpisodes, type ScreenPolicy } from '../sim/episodes.ts';
 import { stateFromHistory } from './features.ts';
 import { LinearPolicy } from './linear-policy.ts';
@@ -52,6 +53,8 @@ export interface TrainOptions {
   credit?: 'session' | 'path';
   /** Archetype mix for the training population; default is the weighted mix. */
   archetypes?: string[];
+  /** Population calibration (npm run calibrate): train against the simulator as fitted to real readers. */
+  calibration?: Calibration;
   /** State feature indices zeroed before the policy sees them (ablations). */
   maskFeatures?: number[];
   /** 'linear': one weight vector per option key. 'mlp': shared hidden layer plus a head per key. */
@@ -111,7 +114,7 @@ export function train(opts: TrainOptions): TrainResult {
 
   for (let it = 0; it < opts.iterations; it++) {
     const popSeed = opts.seed * 7919 + it;
-    const users = makePopulation(opts.usersPerIteration, makeRng(popSeed), opts.archetypes);
+    const users = makePopulation(opts.usersPerIteration, makeRng(popSeed), opts.archetypes, opts.calibration);
     const sp = learnedScreenPolicy(policy, false, epsilon, opts.maskFeatures ?? []);
     const { trajectories, stats } = runEpisodes(sp, users, fakeData, opts.maxSessions, popSeed);
 

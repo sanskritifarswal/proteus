@@ -5,9 +5,11 @@ import { makeRng } from '../rng.ts';
 import { fakeData } from '../fake-data.ts';
 import { LiveContent, staticContent, type ContentProvider } from '../content/content.ts';
 import { makePopulation } from '../sim/users.ts';
+import { IDENTITY, loadCalibration, describeCalibration, type Calibration } from '../sim/calibration.ts';
 import { simulateSession } from '../sim/simulate.ts';
 import { sessionReward } from '../reward.ts';
 import { assemble, type ExportedRecord } from '../collect.ts';
+import { SessionStore } from '../store.ts';
 
 /**
  * The sim-to-real gap, measured. For each real session, the same tree is
@@ -16,7 +18,7 @@ import { assemble, type ExportedRecord } from '../collect.ts';
  * |z| is routinely large is one the simulator gets wrong for real people;
  * that is where calibration effort should go.
  *
- * usage: node src/real/compare.ts [--store out/server | --file out/sessions.jsonl] [--users 200] [--content out/server/content.json] [--return-window-days 7]
+ * usage: node src/real/compare.ts [--store out/server | --file out/sessions.jsonl] [--users 200] [--content out/server/content.json] [--return-window-days 7] [--calibration out/calibration.json]
  *
  * With --content, the simulated population reads the server's cached live
  * content (its current pool, not the pool each screen was served from)
@@ -60,7 +62,7 @@ export interface Comparison {
  * count, personal feeds), so a reader's Nth session is compared as an Nth
  * session even when only recent ones are wanted.
  */
-export function compareSessions(records: SessionRecord[], usersPerTree = 200, seed = 1, content: ContentProvider = staticContent(fakeData), only?: (s: SessionRecord) => boolean): { perSession: Comparison[]; meanAbsZ: Record<Metric, number>; meanZ: Record<Metric, number> } {
+export function compareSessions(records: SessionRecord[], usersPerTree = 200, seed = 1, content: ContentProvider = staticContent(fakeData), only?: (s: SessionRecord) => boolean, calibration: Calibration = IDENTITY): { perSession: Comparison[]; meanAbsZ: Record<Metric, number>; meanZ: Record<Metric, number> } {
   if (!Number.isInteger(usersPerTree) || usersPerTree < 2) throw new Error(`usersPerTree must be an integer >= 2 (got ${usersPerTree})`);
   const perSession: Comparison[] = [];
   const byUser = new Map<string, SessionRecord[]>();
@@ -70,7 +72,7 @@ export function compareSessions(records: SessionRecord[], usersPerTree = 200, se
     const seen = new Set<string>();
     list.forEach((rec, idx) => {
       if (only && !only(rec)) { for (const e of rec.events) if (e.type === 'open') seen.add(e.article); return; }
-      const pop = makePopulation(usersPerTree, makeRng(seed));
+      const pop = makePopulation(usersPerTree, makeRng(seed), undefined, calibration);
       // The feeds as this user would have had them: personal sections come from their earlier sessions.
       const data = content.forUser(list.slice(0, idx));
       const sims = pop.map((u, i) => metricsOf(simulateSession(u, rec.tree, data, rec.grammar, rec.session, { seen: new Set(seen), sessionsSoFar: idx }, makeRng(seed * 1000 + i))));
@@ -99,8 +101,9 @@ if (process.argv[1] && basename(process.argv[1]) === 'compare.ts') {
   const opt = (name: string) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };
   const users = Number(opt('users') ?? '200');
   const returnWindowDays = Number(opt('return-window-days') ?? '7');
-  if (!Number.isInteger(users) || users < 2 || !(Number.isFinite(returnWindowDays) && returnWindowDays > 0)) { console.error('usage: node src/real/compare.ts [--store dir | --file f] [--users <int>=2] [--content cache.json] [--return-window-days 7]'); process.exit(2); }
+  if (!Number.isInteger(users) || users < 2 || !(Number.isFinite(returnWindowDays) && returnWindowDays > 0)) { console.error('usage: node src/real/compare.ts [--store dir | --file f] [--users <int>=2] [--content cache.json] [--return-window-days 7] [--calibration f]'); process.exit(2); }
   const returnWindowMs = returnWindowDays * 86_400_000;
+  const calibration = opt('calibration') ? loadCalibration(opt('calibration')!) : IDENTITY;
   let records: SessionRecord[] = [];
   if (opt('file')) {
     const f = opt('file')!;
@@ -108,8 +111,6 @@ if (process.argv[1] && basename(process.argv[1]) === 'compare.ts') {
     const raw = readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as ExportedRecord);
     records = [...assemble(raw, { returnWindowMs }).values()].flat();
   } else {
-    // Imported here, not at the top: the server imports this module for its status page.
-    const { SessionStore } = await import('../server.ts');
     const store = new SessionStore(opt('store') ?? 'out/server', { returnWindowMs });
     records = store.users().flatMap((u) => store.sessions(u));
   }
@@ -122,8 +123,8 @@ if (process.argv[1] && basename(process.argv[1]) === 'compare.ts') {
     if (live.size === 0) { console.error(`${f} holds no articles`); process.exit(1); }
     content = live;
   }
-  const { perSession, meanAbsZ, meanZ } = compareSessions(records, users, 1, content);
-  console.log(`${records.length} real session(s), each against ${users} simulated users on the same tree\n`);
+  const { perSession, meanAbsZ, meanZ } = compareSessions(records, users, 1, content, undefined, calibration);
+  console.log(`${records.length} real session(s), each against ${users} simulated users on the same tree${opt('calibration') ? ` (calibrated: ${describeCalibration(calibration)})` : ''}\n`);
   console.log(`${'user'.padEnd(14)} ${'s'.padStart(2)} ${METRICS.map((m) => m.padStart(14)).join('')}`);
   for (const c of perSession) console.log(`${c.user.padEnd(14)} ${String(c.session).padStart(2)} ${METRICS.map((m) => `${c.real[m].toFixed(1)} (${c.z[m] >= 0 ? '+' : ''}${c.z[m].toFixed(1)}σ)`.padStart(14)).join('')}`);
   console.log(`\n${'mean z'.padEnd(17)} ${METRICS.map((m) => `${meanZ[m] >= 0 ? '+' : ''}${meanZ[m].toFixed(2)}`.padStart(14)).join('')}`);

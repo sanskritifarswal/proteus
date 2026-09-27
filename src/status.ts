@@ -3,7 +3,8 @@ import type { SessionRecord } from './events.ts';
 import { sessionReward } from './reward.ts';
 import { compareSessions, metricsOf, METRICS, type Metric } from './real/compare.ts';
 import type { ContentProvider } from './content/content.ts';
-import type { SessionStore } from './server.ts';
+import { IDENTITY, type Calibration } from './sim/calibration.ts';
+import type { SessionStore } from './store.ts';
 
 /**
  * What the operator wants to glance at daily while readers are on the
@@ -37,6 +38,7 @@ export interface Status {
     uptimeSec: number;
     policy: string;
     epsilon: number;
+    calibration: Calibration | null;
     store: { users: number; sessions: number; traces: number; skippedLines: number };
     content: ContentInfo;
   };
@@ -80,6 +82,8 @@ export interface StatusOptions {
   simUsers?: number;
   /** Most recent real sessions to simulate. Default 30. */
   recentSessions?: number;
+  /** Population calibration for the gap; identity when unset. */
+  calibration?: Calibration;
   now?: () => number;
 }
 
@@ -135,7 +139,7 @@ export class StatusReporter {
       server: {
         startedAt: new Date(this.opts.startedAt).toISOString(),
         uptimeSec: Math.round((now() - this.opts.startedAt) / 1000),
-        policy: this.opts.policy, epsilon: this.opts.epsilon,
+        policy: this.opts.policy, epsilon: this.opts.epsilon, calibration: this.opts.calibration ?? null,
         store: { users: users.length, sessions: all.length, traces: this.store.traceCount(), skippedLines: this.store.skipped.length },
         content: describe,
       },
@@ -161,13 +165,13 @@ export class StatusReporter {
     // comparison. The cache identity covers the content of every session, since
     // the store can replace a record with one of equal length.
     const targets = new Set(all.map((s, i) => ({ s, i, t: endedAt(s) ?? -1 })).sort((a, b) => b.t - a.t || b.i - a.i).slice(0, Math.max(1, recent)).map((x) => x.s));
-    const digest = createHash('sha256');
+    const digest = createHash('sha256').update(JSON.stringify(this.opts.calibration ?? IDENTITY));
     for (const s of all) digest.update(`${s.user}:${s.session}:${s.returned}:${targets.has(s) ? 1 : 0}:${s.startedAt ?? ''}:`).update(JSON.stringify(s.tree)).update(JSON.stringify(s.events)).update('\n');
     const key = digest.digest('hex');
     if (this.simCache?.key === key) return this.simCache.value;
     const simUsers = this.opts.simUsers ?? 50;
     const t0 = now();
-    const { meanZ, meanAbsZ } = compareSessions(all, simUsers, 1, this.opts.content, (s) => targets.has(s));
+    const { meanZ, meanAbsZ } = compareSessions(all, simUsers, 1, this.opts.content, (s) => targets.has(s), this.opts.calibration ?? IDENTITY);
     const value: Status['sim'] = { sessions: targets.size, simUsers, meanZ, meanAbsZ, computedAt: new Date(now()).toISOString(), ms: now() - t0 };
     this.simCache = { key, value };
     return value;
@@ -191,7 +195,7 @@ export function renderStatus(s: Status, userLink: (user: string) => string): str
     : '<p>No sessions yet.</p>';
   const sim = s.sim
     ? `<table><tr><th></th>${METRICS.map((m) => `<th>${m}</th>`).join('')}</tr><tr><td>mean z</td>${METRICS.map((m) => `<td>${z(s.sim!.meanZ[m])}</td>`).join('')}</tr><tr><td>mean |z|</td>${METRICS.map((m) => `<td>${f2(s.sim!.meanAbsZ[m])}</td>`).join('')}</tr></table>
-<p class="note">${s.sim.sessions} most recent real session(s), each against ${s.sim.simUsers} simulated readers on the same tree, computed ${when(s.sim.computedAt)} in ${s.sim.ms} ms. |z| near 0: the simulator predicts this metric for real readers; |z| well above 1: it does not, and that is where calibration goes. Skip with <code>?sim=0</code>.</p>`
+<p class="note">${s.sim.sessions} most recent real session(s), each against ${s.sim.simUsers} simulated readers${s.server.calibration ? ' (calibrated population)' : ''} on the same tree, computed ${when(s.sim.computedAt)} in ${s.sim.ms} ms. |z| near 0: the simulator predicts this metric for real readers; |z| well above 1: it does not, and that is where calibration goes. Skip with <code>?sim=0</code>.</p>`
     : '<p class="note">Skipped (<code>?sim=0</code>) or nothing to compare.</p>';
   return `<!doctype html><meta charset="utf-8"><title>Proteus status</title>
 <style>body{font-family:system-ui;padding:24px;max-width:980px;color:#111;background:#fff;margin:0 auto}table{border-collapse:collapse;margin:8px 0 16px}th,td{border:1px solid #ddd;padding:4px 8px;text-align:right;font-variant-numeric:tabular-nums}th:first-child,td:first-child{text-align:left}th{background:#f4f4f6}.note{color:#555;font-size:13px}h2{margin-top:28px}</style>

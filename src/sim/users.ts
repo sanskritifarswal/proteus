@@ -1,4 +1,5 @@
 import type { Rng } from '../rng.ts';
+import { IDENTITY, type Calibration } from './calibration.ts';
 
 /**
  * Synthetic readers. Each has latent preferences the policy never sees
@@ -30,6 +31,8 @@ export interface SimUser {
   social: number;
   /** Baseline probability of coming back next session. */
   returnBase: number;
+  /** Multiplier on dwell time; 1 as designed, set by calibration. */
+  dwellScale: number;
 }
 
 export const TOPICS = ['Local', 'Economy', 'Sport', 'Science', 'Culture', 'Work', 'Weather', 'Money', 'Food', 'Tech', 'Health', 'Design', 'Education'];
@@ -37,7 +40,7 @@ export const TOPICS = ['Local', 'Economy', 'Sport', 'Science', 'Culture', 'Work'
 interface Archetype {
   name: string;
   weight: number;
-  base: Omit<SimUser, 'id' | 'archetype' | 'topics'>;
+  base: Omit<SimUser, 'id' | 'archetype' | 'topics' | 'dwellScale'>;
   likes: string[];
   dislikes: string[];
 }
@@ -86,7 +89,7 @@ function normal(rng: Rng): number {
 }
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
-export function makeUser(id: string, rng: Rng, archetype?: Archetype): SimUser {
+export function makeUser(id: string, rng: Rng, archetype?: Archetype, cal: Calibration = IDENTITY): SimUser {
   let a = archetype;
   if (!a) {
     let r = rng.next() * ARCHETYPES.reduce((s, x) => s + x.weight, 0);
@@ -102,24 +105,26 @@ export function makeUser(id: string, rng: Rng, archetype?: Archetype): SimUser {
     id, archetype: a.name, topics,
     densityPref: clamp(b.densityPref + 0.25 * normal(rng), -1, 1),
     visualPref: clamp(b.visualPref + 0.25 * normal(rng), -1, 1),
-    patience: Math.max(2, b.patience * Math.exp(0.3 * normal(rng))),
-    curiosity: b.curiosity + 0.3 * normal(rng),
-    readDepth: clamp(b.readDepth + 0.12 * normal(rng), 0.05, 1),
-    social: clamp(b.social + 0.15 * normal(rng), 0, 1),
+    patience: Math.max(2, b.patience * Math.exp(0.3 * normal(rng)) * cal.patience),
+    curiosity: b.curiosity + 0.3 * normal(rng) + cal.curiosity,
+    readDepth: clamp((b.readDepth + 0.12 * normal(rng)) * cal.readDepth, 0.05, 1),
+    social: clamp((b.social + 0.15 * normal(rng)) * cal.social, 0, 1),
     returnBase: clamp(b.returnBase + 0.1 * normal(rng), 0.05, 0.98),
+    dwellScale: cal.dwell,
   };
 }
 
 /**
  * A population. With no archetype, the default weighted mix. With one name,
  * all that archetype. With several names, round-robin so the mix is exact.
+ * A calibration (see calibration.ts) moves the whole population's scales.
  */
-export function makePopulation(n: number, rng: Rng, archetype?: string | string[]): SimUser[] {
+export function makePopulation(n: number, rng: Rng, archetype?: string | string[], cal: Calibration = IDENTITY): SimUser[] {
   const names = archetype === undefined ? [] : Array.isArray(archetype) ? archetype : [archetype];
   const chosen = names.map((name) => {
     const a = ARCHETYPES.find((x) => x.name === name);
     if (!a) throw new Error(`unknown archetype '${name}'`);
     return a;
   });
-  return Array.from({ length: n }, (_, i) => makeUser(`u${i}`, rng, chosen.length ? chosen[i % chosen.length] : undefined));
+  return Array.from({ length: n }, (_, i) => makeUser(`u${i}`, rng, chosen.length ? chosen[i % chosen.length] : undefined, cal));
 }

@@ -165,7 +165,7 @@ export function simulateSession(
       push({ type: 'open', path: x.path, article: article.title });
       const readMin = Number.parseInt(article.readTime, 10) || 4;
       const completion = clamp(user.readDepth + 0.35 * aff + 0.15 * (rng.next() - 0.5), 0.02, 1);
-      const dwell = Math.round(readMin * 60000 * completion * (0.7 + 0.6 * rng.next()));
+      const dwell = Math.round(readMin * 60000 * completion * (0.7 + 0.6 * rng.next()) * (user.dwellScale ?? 1));
       t += dwell;
       push({ type: 'dwell', path: x.path, article: article.title, value: dwell });
       push({ type: 'complete', path: x.path, article: article.title, value: completion });
